@@ -1,0 +1,21 @@
+.main-screen {
+    flex: 1; /* Take remaining space */
+    padding: 20px;
+    position: relative;  /*  Очень важно! */
+}
+.module-container{
+    min-height: 300px;  /*Чтобы был виден, когда пустой*/
+    border: 2px dashed gray;
+   position: relative; /*Важно! Чтобы можно было позиционировать относительно .module-container*/
+   width: 100%;       /* Важно, чтобы .module-container занимал всё доступное место */
+    height: 100%;     /* Важно!  */
+
+}
+
+.draggable-module {
+    /*position: absolute; убрано отсюда, тк задаётся в DraggableModule */
+    padding: 10px;
+    border: 1px solid black;
+    margin: 5px;   /*  margin нужен */
+    cursor: pointer;
+}

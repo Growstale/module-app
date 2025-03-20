@@ -1,0 +1,9 @@
+.properties-screen {
+    width: 300px;
+    border-left: 1px solid #ccc;
+    padding: 20px;
+}
+
+.properties-screen div {
+     margin-bottom: 10px;
+}

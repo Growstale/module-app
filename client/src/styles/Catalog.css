@@ -1,0 +1,18 @@
+.catalog {
+    width: 200px;
+    border-right: 1px solid #ccc;
+    padding: 20px;
+}
+
+.module-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.module {
+    border: 1px solid #ddd;
+    padding: 10px;
+    cursor: grab; /* Important for visual feedback */
+    background-color: white;
+}
