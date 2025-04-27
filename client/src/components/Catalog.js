@@ -4,12 +4,13 @@ import '../styles/Catalog.css';
 
 
 const Catalog = () => {
-    const modules = [ //Примерный список модулей. ID важен.
-        { id: 1, name: 'Module A' },
-        { id: 2, name: 'Module B' },
-        { id: 3, name: 'Module C' },
+    const modules = [
+        { id: 'start', name: 'Start Node', type: 'start' }, 
+        { id: 'end', name: 'End Node', type: 'end' },    
+        { id: 1, name: 'ADD', type: 'regular' },    
+        { id: 2, name: 'MULTIPLY', type: 'regular' },
+        { id: 3, name: 'SQUARE', type: 'regular' },
     ];
-
     return (
         <div className="catalog">
             <h2>Catalog</h2>

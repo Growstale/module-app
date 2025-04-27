@@ -1,4 +1,62 @@
+/* В App.css */
+
 .app {
   display: flex;
   height: 100vh;
+}
+
+.left-panel {
+  width: 250px; /* Или ваша ширина каталога */
+  border-right: 1px solid #ccc;
+  display: flex;
+  flex-direction: column; /* Чтобы элементы шли друг под другом */
+  background-color: #f8f8f8; /* Цвет фона для левой панели */
+}
+
+.top-controls {
+  padding: 15px;
+  border-bottom: 1px solid #ccc; /* Отделить от каталога */
+  background-color: #eaeaea; /* Немного другой фон для блока управления */
+}
+
+.top-controls h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+
+.top-controls button {
+  display: block; /* Каждая кнопка на новой строке */
+  width: 100%;     /* Занимает всю доступную ширину */
+  margin-bottom: 8px; /* Отступ снизу */
+  padding: 8px 10px;
+  /* ... другие стили кнопок ... */
+}
+
+.top-controls .validation-result,
+.top-controls .processing-result {
+  margin-top: 10px;
+  font-size: 0.9em;
+  /* ... стили для результатов ... */
+}
+
+
+/* Каталог теперь внутри .left-panel */
+.catalog {
+  flex-grow: 1; /* Занимает оставшееся место в .left-panel */
+  overflow-y: auto; /* Если каталог длинный */
+  padding: 15px;
+}
+
+/* Остальные стили для .main-screen, .properties-screen остаются как были */
+.main-screen {
+  flex-grow: 1; /* Занимает основное пространство */
+  /* ... */
+}
+
+.properties-screen {
+  width: 300px; /* Или ваша ширина */
+  border-left: 1px solid #ccc;
+  /* ... */
 }

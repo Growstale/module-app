@@ -19,3 +19,34 @@
     margin: 5px;   /*  margin нужен */
     cursor: pointer;
 }
+
+/* Пример в MainScreen.css или аналогичном файле */
+.draggable-module .port {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background-color: #555;
+    border: 1px solid black;
+    border-radius: 50%;
+    z-index: 1;
+    box-sizing: border-box; /* Учитывать border в размере */
+  }
+  
+  .draggable-module .output-port {
+    top: 50%;
+    right: -6px; /* Центр порта на границе */
+    transform: translateY(-50%);
+    cursor: crosshair;
+  }
+  
+  .draggable-module .input-port {
+    top: 50%;
+    left: -6px; /* Центр порта на границе */
+    transform: translateY(-50%);
+    cursor: default; /* Или тоже crosshair, если можно начинать и отсюда */
+  }
+  
+  /* Опционально: подсветка при наведении линии (если добавили collect в useDrop порта) */
+  /* .draggable-module .input-port.is-over {
+    background-color: lightgreen;
+  } */

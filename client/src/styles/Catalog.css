@@ -1,6 +1,5 @@
 .catalog {
     width: 200px;
-    border-right: 1px solid #ccc;
     padding: 20px;
 }
 
@@ -13,6 +12,6 @@
 .module {
     border: 1px solid #ddd;
     padding: 10px;
-    cursor: grab; /* Important for visual feedback */
+    cursor: grab;
     background-color: white;
 }

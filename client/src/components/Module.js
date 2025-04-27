@@ -1,17 +1,19 @@
 import React from 'react';
 import { useDrag } from 'react-dnd';
 
+// useDrag - to make element draggable
+// to make DOM-element draggable you need to connect drag function to it
 const Module = ({ module }) => {
-  const [, drag] = useDrag(() => ({
-    type: 'MODULE',  //  Тип, должен совпадать с типом в useDrop
-    item: { id: module.id, name: module.name }, //  Данные, которые передаются при перетаскивании.
-    collect: (monitor) => ({  // Функция для сбора информации о состоянии drag-and-drop
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: 'MODULE', // draggable name
+    item: { id: module.id, name: module.name, type: module.type }, // draggable data
+    collect: (monitor) => ({ 
       isDragging: !!monitor.isDragging(),
     }),
   }));
 
   return (
-    <div ref={drag} className="module" style={{ opacity:  1 }}>
+    <div ref={drag} className="module" style={{ opacity: isDragging ? 0.5 : 1 }}>
       {module.name}
     </div>
   );

@@ -1,9 +1,26 @@
-.properties-screen {
-    width: 300px;
-    border-left: 1px solid #ccc;
-    padding: 20px;
+/* PropertiesScreen.css или ваш главный CSS файл */
+
+.properties-actions {
+    margin-top: 20px;
+    display: flex; /* Расположим кнопки рядом */
+    gap: 10px; /* Пространство между кнопками */
 }
 
-.properties-screen div {
-     margin-bottom: 10px;
+.properties-actions .delete-button {
+    background-color: #f44336; /* Красный цвет */
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.properties-actions .delete-button:hover {
+    background-color: #d32f2f; /* Более темный красный при наведении */
+}
+
+.properties-actions .delete-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
 }
