@@ -6,8 +6,13 @@ import { useDrag } from 'react-dnd';
 const Module = ({ module }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'MODULE', // draggable name
-    item: { id: module.id, name: module.name, type: module.type }, // draggable data
-    collect: (monitor) => ({ 
+    item: {
+      id: module.id,
+      name: module.name,
+      type: module.type,
+      system: module.system // <-- ДОБАВЛЕНО
+  },
+  collect: (monitor) => ({ 
       isDragging: !!monitor.isDragging(),
     }),
   }));

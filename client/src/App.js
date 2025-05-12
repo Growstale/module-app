@@ -25,46 +25,82 @@ function App() {
       return mainScreenModules.some(m => m.type === type);
     };
 
-    const handleDrop = (item, offset) => {
+    const getDefaultProperties = (item) => {
+        let defaultProps = {
+          color: '#9e9e9e' // Общий серый цвет по умолчанию
+        };
+    
+        switch (item.id) {
+case 'distributor_rge100':
+         defaultProps = {
+          ...defaultProps,
+          pressureDrop: 1.5,     // МПа, номинальный перепад
+          internalLeakage: 0.02, // л/мин
+          sideSurfaceArea: 0.32, // м²
+          nominalFlowLmin: 100,  // л/мин, ПРИМЕР! Нужно найти реальное значение для RGE100
+          color: '#ff9800',
+        };
+        break;
+      case 'power_block_bpg': // Блок питания
+         defaultProps = {
+          ...defaultProps,
+          pressureDrop: 0.35,    // МПа
+          internalLeakage: 0.1,  // л/мин
+          sideSurfaceArea: 0.085, // м²
+          nominalFlowLmin: 50,   // л/мин, ПРИМЕР!
+          color: '#9c27b0',
+        };
+        break;
+      case 'hydro_block_gbf': // Гидроблок
+         defaultProps = {
+          ...defaultProps,
+          pressureDrop: 0.3,     // МПа
+          internalLeakage: 0.015, // л/мин
+          sideSurfaceArea: 0.063, // м²
+          nominalFlowLmin: 40,    // л/мин, ПРИМЕР!
+          color: '#e91e63',
+        };
+        break;
+      case 'filter_frc12':
+         defaultProps = {
+          ...defaultProps,
+          pressureDrop: 0.1,     // МПа, номинальный перепад при ном. расходе чистого фильтра
+          sideSurfaceArea: 0.198, // м²
+          filtrationRate: 30,    // мкм
+          nominalFlowLmin: 60,   // л/мин, ПРИМЕР! Нужно найти реальное значение для FRC12
+          color: '#ffeb3b',
+        };
+        break;
+      case 'pipe':
+        defaultProps = { /* ... как было ... */ };
+        break;
+    }
+    return defaultProps;
+  };
+ 
+
+    const handleDrop = useCallback((item, offset) => {
       if (item.instanceId) {
           updateModulePosition(item.instanceId, offset);
       }
       else if (item.type) { 
 
-            let defaultProps = {
-                color: 'blue'
-            };
+        const defaultProps = getDefaultProperties(item);
 
-          if ((item.type === 'start' && hasModuleOfType('start')) ||
-              (item.type === 'end' && hasModuleOfType('end'))) {
-              alert(`You can only place one "${item.name}" module`);
-              return; 
-          }
+        const newInstance = {
+            id: item.id,
+            name: item.name,
+            type: item.type, // Сохраняем тип для PropertiesScreen
+            system: item.system, // Сохраняем систему, если есть
+            instanceId: Date.now(), // Уникальный ID экземпляра
+            properties: defaultProps, // Используем новые дефолтные свойства
+            position: { x: offset.x, y: offset.y }
+        };
 
-          if (item.type === 'start') {
-            defaultProps.color = 'green';
-            defaultProps.startValue = 0;
-            } else if (item.type === 'end') {
-                defaultProps.color = 'red';
-            } else if (item.id === 1) {
-                defaultProps.valueToAdd = 1;
-            } else if (item.id === 2) {
-                defaultProps.factor = 2;
-            } else if (item.id === 3) { 
-            }
-
-          const newInstance = {
-              id: item.id,
-              name: item.name,
-              type: item.type,
-              instanceId: Date.now(),
-              properties: defaultProps,
-              position: { x: offset.x, y: offset.y }
-          };
           setMainScreenModules((prev) => [...prev, newInstance]);
           setValidationResult(''); 
         }
-    };
+    }, [mainScreenModules]);
 
     const handleModuleClick = (module) => { 
       setSelectedModule(module);
@@ -100,19 +136,25 @@ function App() {
           setSelectedModule({...selectedModule, properties: newProperties });
       }
       setValidationResult('');
+      setProcessingResult('');
     }, [selectedModule]);
 
-    const updateModulePosition = (instanceId, newPosition) => {
-      setMainScreenModules(prevModules =>
-        prevModules.map(module => {
-          if (module.instanceId === instanceId) {
-            return { ...module, position: newPosition };
-          }
-          return module;
-        })
-      );
-    };
-
+    const updateModulePosition = useCallback((instanceId, newPosition) => {
+        setMainScreenModules(prevModules =>
+          prevModules.map(module => {
+            if (module.instanceId === instanceId) {
+              // Важно: обновляем только позицию, сохраняя остальные данные
+              return { ...module, position: newPosition };
+            }
+            return module;
+          })
+        );
+        // Обновляем позицию и в selectedModule, если он выбран и перемещается
+        if(selectedModule && selectedModule.instanceId === instanceId) {
+             setSelectedModule(prevSelected => ({...prevSelected, position: newPosition }));
+        }
+      }, [selectedModule]); 
+    
     const handleAddConnection = useCallback((sourceId, targetId) => {
       if (sourceId === targetId) {
           console.warn("Cannot connect module to itself");
@@ -159,6 +201,7 @@ function App() {
       };
       setConnections(prevConnections => [...prevConnections, newConnection]);
       setValidationResult('');
+      setProcessingResult('');
   }, [connections, mainScreenModules]); 
 
       // --- Функция Поиска Цепочки (DFS) ---
@@ -215,58 +258,50 @@ function App() {
 
     }, [mainScreenModules, connections]); // Зависит от модулей и связей
 
+
     const handleProcessChain = async () => {
-        const result = findChainPath();
-            if (result && result.chain) {
-                alert("Цепочка: " + result.chain.join(" -> "));
-
-            const modulesToSend = mainScreenModules.map(m => {
-                let opKey = null;
-                if (m.type === 'start') opKey = 'GET_START_VALUE';
-                else if (m.type === 'end') opKey = 'GET_END_VALUE';
-                else if (m.id === 1) opKey = 'ADD_NUMBER';
-                else if (m.id === 2) opKey = 'MULTIPLY_BY';
-                else if (m.id === 3) opKey = 'SQUARE'; 
-
-                return {
-                    instanceId: m.instanceId,
-                    type: m.type,
-                    name: m.name, 
-                    operationKey: opKey, 
-                    properties: m.properties 
-                };
-            });
-
-            const payload = {
-                modules: modulesToSend,
-                connections: connections,
-            };
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/process-chain`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                });
-
-                const data = await response.json();
-                const currentResultString = `Result: ${data.result}`; 
-                setProcessingResult(currentResultString);
-
-                if (!response.ok) {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                }
-
-                alert(currentResultString)
-
-            } catch (error) {
-                console.error("Error processing chain:", error);
-                setProcessingResult(`Error: ${error.message}`);
-            }
+        // Payload для нового API
+        const payload = {
+            modules: mainScreenModules,
+            connections: connections,
+            // Можно добавить глобальные параметры сюда, если нужно
+            // systemParams: { ambientTemp: 30, heatTransferCoeff: 15 }
+        };
+        console.log("Payload to send for calculation:", JSON.stringify(payload, null, 2));
+    
+        // Вызов НОВОГО API
+        setIsLoading(true);
+        setProcessingResult('Calculating...'); // Показываем статус
+        try {
+          const response = await fetch(`${API_BASE_URL}/calculate-hydraulics`, { // Имя нового эндпоинта
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+          const data = await response.json(); // Получаем результат от бэкенда
+          if (!response.ok) {
+              throw new Error(data.error || `HTTP error! status: ${response.status}`);
+          }
+          // Отображаем основной результат и заключение
+          const resultString = `Result: Temp = ${data.calculatedSteadyStateTempC}°C. ${data.conclusion}`;
+          setProcessingResult(resultString);
+          alert(resultString); // Показываем пользователю
+    
+          // Можно вывести детали в консоль
+          console.log("Calculation Details:", data.details);
+    
+        } catch (error) {
+            console.error("Error processing hydraulics:", error);
+            const errorMsg = `Error: ${error.message}`;
+            setProcessingResult(errorMsg);
+            alert(errorMsg);
+        } finally {
+            setIsLoading(false);
         }
-    };
+      };
+    
+    
+
 
     const handleRemoveConnection = useCallback((connectionIdToRemove) => {
         setConnections(prevConnections =>

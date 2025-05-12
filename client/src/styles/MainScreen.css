@@ -1,52 +1,75 @@
-.main-screen {
-    flex: 1; /* Take remaining space */
-    padding: 20px;
-    position: relative;  /*  Очень важно! */
-}
-.module-container{
-    min-height: 300px;  /*Чтобы был виден, когда пустой*/
-    border: 2px dashed gray;
-   position: relative; /*Важно! Чтобы можно было позиционировать относительно .module-container*/
-   width: 100%;       /* Важно, чтобы .module-container занимал всё доступное место */
-    height: 100%;     /* Важно!  */
-
-}
-
+/* В MainScreen.css или App.css */
 .draggable-module {
-    /*position: absolute; убрано отсюда, тк задаётся в DraggableModule */
-    padding: 10px;
-    border: 1px solid black;
-    margin: 5px;   /*  margin нужен */
-    cursor: pointer;
+  /* position: absolute; - остается в JS */
+  /* width/height - остаются в JS */
+  /* backgroundColor - остается в JS */
+  /* color - лучше подбирать динамически или убрать 'white' */
+  padding: 10px;
+  border: 1px solid #ccc; /* Мягкая граница по умолчанию */
+  border-radius: 6px; /* Скругление */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Легкая тень */
+  cursor: grab;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease; /* Плавность */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9em;
+  box-sizing: border-box;
+  /* Можно добавить иконку перед текстом */
 }
 
-/* Пример в MainScreen.css или аналогичном файле */
+.draggable-module:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  border-color: #aaa;
+}
+
+.draggable-module.type-start,
+.draggable-module.type-end {
+  border-width: 2px;
+  border-color: gold; /* Или другой цвет для выделения */
+}
+
+/* Стили для портов */
 .draggable-module .port {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    background-color: #555;
-    border: 1px solid black;
-    border-radius: 50%;
-    z-index: 1;
-    box-sizing: border-box; /* Учитывать border в размере */
-  }
-  
-  .draggable-module .output-port {
-    top: 50%;
-    right: -6px; /* Центр порта на границе */
-    transform: translateY(-50%);
-    cursor: crosshair;
-  }
-  
-  .draggable-module .input-port {
-    top: 50%;
-    left: -6px; /* Центр порта на границе */
-    transform: translateY(-50%);
-    cursor: default; /* Или тоже crosshair, если можно начинать и отсюда */
-  }
-  
-  /* Опционально: подсветка при наведении линии (если добавили collect в useDrop порта) */
-  /* .draggable-module .input-port.is-over {
-    background-color: lightgreen;
-  } */
+  position: absolute;
+  width: 14px; /* Чуть больше */
+  height: 14px;
+  background-color: #f0f0f0; /* Светлее */
+  border: 1px solid #aaa;
+  border-radius: 50%;
+  z-index: 1;
+  box-sizing: border-box;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.draggable-module .port:hover {
+   background-color: #ddd;
+   border-color: #333;
+}
+
+.draggable-module .output-port {
+  top: 50%;
+  right: -7px; /* Половина ширины */
+  transform: translateY(-50%);
+  cursor: crosshair;
+}
+.draggable-module .output-port.busy { /* Добавить класс .busy если порт занят */
+  background-color: lightcoral;
+  cursor: not-allowed;
+}
+
+
+.draggable-module .input-port {
+  top: 50%;
+  left: -7px; /* Половина ширины */
+  transform: translateY(-50%);
+  cursor: default;
+}
+.draggable-module .input-port.busy { /* Добавить класс .busy если порт занят */
+  background-color: lightcoral;
+   cursor: not-allowed;
+}
+.draggable-module .input-port.is-over { /* Класс при наведении линии */
+  background-color: lightgreen;
+  border-color: green;
+}
