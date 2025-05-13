@@ -184,6 +184,15 @@ const PropertiesScreen = ({ selectedModule, updateModuleProperties, onDeleteModu
                 {renderInputField('Коэф. мест. сопротивл. (ξ)', 'localResistanceCoeff', '', 'number', '0.1')}
               </>
             );    
+              case 'tee_splitter':
+        return (
+          <>
+            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа')}
+            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин')}
+            {/* Можно добавить поля для указания, сколько выходов активно, но это усложнит */}
+            <p>Конфигурация портов определяется соединениями.</p>
+          </>
+        );
       default:
         // Если тип модуля неизвестен или для него нет специфичных свойств
         return <p>No specific properties defined for this module.</p>;

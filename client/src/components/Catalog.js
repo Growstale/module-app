@@ -25,6 +25,8 @@ const Catalog = () => {
     
         { id: 'pipe', name: 'Трубопровод', type: 'pipe', system: 'common' }, // Общий тип трубы
 
+        { id: 'tee_splitter', name: 'Тройник', type: 'splitter', system: 'common' }
+
       ];
         return (
         <div className="catalog">

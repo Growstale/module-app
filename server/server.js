@@ -421,19 +421,17 @@ function calculateCylinderPressure(cylinderModule, drainLineLossPa) {
     return requiredPistonPressurePa;
 }
 
+
 app.post('/api/calculate-hydraulics', (req, res) => {
     console.log("Received /api/calculate-hydraulics request");
     try {
       const { modules, connections } = req.body;
 
       // --- 1. Валидация входных данных ---
-      if (!Array.isArray(modules) || modules.length === 0) {
-        return res.status(400).json({ error: "Invalid input: 'modules' must be a non-empty array." });
-      }
+      if (!Array.isArray(modules) || modules.length === 0) { return res.status(400).json({ error: "Invalid input: 'modules' must be a non-empty array." }); }
       const engine = modules.find(m => m.type === 'engine_input');
       const tankModule = modules.find(m => m.type === 'tank_output');
       const pumps = modules.filter(m => m.type === 'pump');
-
       if (!engine) return res.status(400).json({ error: "Engine module not found." });
       if (!tankModule) return res.status(400).json({ error: "Tank module not found on diagram." });
       if (pumps.length === 0) return res.status(400).json({ error: "No pump modules found." });
@@ -473,12 +471,10 @@ app.post('/api/calculate-hydraulics', (req, res) => {
             pumpFlowLmin: 0, pumpFlowM3s: 0,
             velocities: { suction: 0, pressure: 0, drain: 0 },
             losses: {
-                friction: { suctionPa: 0, pressurePa: 0, drainPa: 0 }, // Эти будут суммарные потери трения в трубах линии
-                local: { suctionPa: 0, pressurePa: 0, drainPa: 0 },    // Эти будут суммарные местные потери в трубах линии
-                componentsPressurePa: 0,
-                componentsDrainPa: 0,
-                totalPressureLineLossMPa: 0,
-                totalDrainLineLossMPa: 0
+                friction: { suctionPa: 0, pressurePa: 0, drainPa: 0 },
+                local: { suctionPa: 0, pressurePa: 0, drainPa: 0 },
+                componentsPressurePa: 0, componentsDrainPa: 0,
+                totalPressureLineLossMPa: 0, totalDrainLineLossMPa: 0
             },
             requiredPumpPressureMPa: 0,
             systemEfficiency: 0, pumpPowerKw: 0, heatGeneratedKw: 0
@@ -505,7 +501,10 @@ app.post('/api/calculate-hydraulics', (req, res) => {
           const suctionPath = findPathModules(tankModule.instanceId, pump.instanceId, connections, modules, new Set([tankModule.instanceId])) || [];
           const suctionPipeModule = suctionPath.find(m => m.type === 'pipe');
           let v_suction = 0;
-          if (suctionPipeModule) {
+          let loss_friction_suction = 0; // Инициализация
+          let loss_local_suction = 0;    // Инициализация
+
+          if (suctionPipeModule && suctionPipeModule.properties) {
               const suctionPipeProps = suctionPipeModule.properties;
               const suctionPipeDiameter = suctionPipeProps?.diameter || DEFAULT_PIPE_DIAMETER;
               const suctionPipeLength = suctionPipeProps?.length || DEFAULT_PIPE_LENGTH;
@@ -514,15 +513,17 @@ app.post('/api/calculate-hydraulics', (req, res) => {
               v_suction = calculateVelocity(pumpFlowM3s, suctionPipeDiameter);
               const re_suction = calculateReynoldsNumber(v_suction, suctionPipeDiameter, fluid.kinematicViscosityM2s);
               const lambda_suction = calculateLambda(re_suction, suctionPipeDiameter, suctionRoughness);
-              results.losses.friction.suctionPa = parseFloat(calculateFrictionLoss(lambda_suction, suctionPipeLength, suctionPipeDiameter, fluid.density, v_suction).toFixed(0));
-              results.losses.local.suctionPa = parseFloat(calculateLocalLoss(suctionLocalZetaSum, fluid.density, v_suction).toFixed(0));
+              loss_friction_suction = calculateFrictionLoss(lambda_suction, suctionPipeLength, suctionPipeDiameter, fluid.density, v_suction);
+              loss_local_suction = calculateLocalLoss(suctionLocalZetaSum, fluid.density, v_suction);
               console.log(`[${systemType.toUpperCase()}] Suction line using pipe ${suctionPipeModule.name} (Ø${suctionPipeDiameter*1000}mm, L=${suctionPipeLength}m)`);
-              console.log(`[${systemType.toUpperCase()}] Suction: V=${v_suction.toFixed(3)} m/s, Re=${re_suction.toFixed(0)}, λ=${lambda_suction.toFixed(4)}, ΔPf=${results.losses.friction.suctionPa}Pa, ΔPl=${results.losses.local.suctionPa}Pa (Σξ=${suctionLocalZetaSum.toFixed(2)})`);
+              console.log(`[${systemType.toUpperCase()}] Suction: V=${v_suction.toFixed(3)} m/s, Re=${re_suction.toFixed(0)}, λ=${lambda_suction.toFixed(4)}, ΔPf=${loss_friction_suction.toFixed(0)}Pa, ΔPl=${loss_local_suction.toFixed(0)}Pa (Σξ=${suctionLocalZetaSum.toFixed(2)})`);
           } else {
-              v_suction = calculateVelocity(pumpFlowM3s, DEFAULT_PIPE_DIAMETER); // Скорость для дефолтной трубы
-              console.warn(`[${systemType.toUpperCase()}] Suction pipe module not found. Using default values.`);
+              v_suction = calculateVelocity(pumpFlowM3s, DEFAULT_PIPE_DIAMETER);
+              console.warn(`[${systemType.toUpperCase()}] Suction pipe module not found or not type 'pipe'. Using default values.`);
           }
           results.velocities.suction = parseFloat(v_suction.toFixed(3));
+          results.losses.friction.suctionPa = parseFloat(loss_friction_suction.toFixed(0));
+          results.losses.local.suctionPa = parseFloat(loss_local_suction.toFixed(0));
 
 
           // --- Напорная и Сливная линии ---
@@ -533,89 +534,74 @@ app.post('/api/calculate-hydraulics', (req, res) => {
             drainLinePathModules = findPathModules(cylinder.instanceId, tankModule.instanceId, connections, modules, new Set([cylinder.instanceId])) || [];
           }
 
-          // -- Напорная линия (трубы) --
-          let v_pressure = 0;
-          let pressurePipeDiameterForLambda = DEFAULT_PIPE_DIAMETER;
-          let pressureRoughnessForLambda = DEFAULT_PIPE_ROUGHNESS;
-          let pressureLineTotalLocalZetaFromPipes = 0;
+          const lineCalculations = (lineName, pathModules, flowM3s, defaultLineZeta) => {
+              console.log(`[${systemType.toUpperCase()}] Calculating ${lineName} Line`);
+              let totalFrictionLossPa = 0;
+              let totalLocalLossFromPipesPa = 0;
+              let avgVelocityForLineLog = 0; // Для логирования средней скорости на линии
+              const pipesOnPath = pathModules.filter(m => m.type === 'pipe');
 
-          const pipesOnPressurePath = pressureLinePathModules.filter(m => m.type === 'pipe');
-          if (pipesOnPressurePath.length > 0) {
-              console.log(`[${systemType.toUpperCase()}] Pressure line path pipes:`, pipesOnPressurePath.map(p => p.name));
-              pressurePipeDiameterForLambda = pipesOnPressurePath[0].properties?.diameter || DEFAULT_PIPE_DIAMETER;
-              pressureRoughnessForLambda = pipesOnPressurePath[0].properties?.roughness || DEFAULT_PIPE_ROUGHNESS;
-              console.log(`[${systemType.toUpperCase()}] Pressure line using Ø${(pressurePipeDiameterForLambda*1000).toFixed(0)}mm from ${pipesOnPressurePath[0].name} for Lambda calc.`);
+              if (pipesOnPath.length > 0) {
+                  console.log(`[${systemType.toUpperCase()}] ${lineName} line path pipes:`, pipesOnPath.map(p => `${p.name} (D=${((p.properties?.diameter || DEFAULT_PIPE_DIAMETER)*1000).toFixed(0)}mm, L=${p.properties?.length || DEFAULT_PIPE_LENGTH}m, ξ=${p.properties?.localResistanceCoeff || 0})`));
+                  // Используем скорость в первой трубе как "среднюю" для общих местных потерь линии
+                  avgVelocityForLineLog = calculateVelocity(flowM3s, pipesOnPath[0].properties?.diameter || DEFAULT_PIPE_DIAMETER);
 
-              v_pressure = calculateVelocity(pumpFlowM3s, pressurePipeDiameterForLambda); // Общая скорость для линии по первому диаметру
-              const re_pressure_line = calculateReynoldsNumber(v_pressure, pressurePipeDiameterForLambda, fluid.kinematicViscosityM2s);
-              const lambda_pressure_line = calculateLambda(re_pressure_line, pressurePipeDiameterForLambda, pressureRoughnessForLambda);
+                  pipesOnPath.forEach((pipe) => {
+                      const pipeProps = pipe.properties;
+                      const pipeD_actual = pipeProps?.diameter || DEFAULT_PIPE_DIAMETER;
+                      const pipeL_actual = pipeProps?.length || DEFAULT_PIPE_LENGTH;
+                      const pipeRoughness_actual = pipeProps?.roughness || DEFAULT_PIPE_ROUGHNESS;
+                      const pipeLocalZeta_actual = pipeProps?.localResistanceCoeff || 0;
 
-              pipesOnPressurePath.forEach(pipe => {
-                  const pipeProps = pipe.properties;
-                  const pipeL = pipeProps?.length || DEFAULT_PIPE_LENGTH;
-                  const pipeD_actual = pipeProps?.diameter || DEFAULT_PIPE_DIAMETER;
-                  const v_segment = calculateVelocity(pumpFlowM3s, pipeD_actual); // Скорость в этом сегменте
+                      const v_segment = calculateVelocity(flowM3s, pipeD_actual);
+                      const re_segment = calculateReynoldsNumber(v_segment, pipeD_actual, fluid.kinematicViscosityM2s);
+                      const lambda_segment = calculateLambda(re_segment, pipeD_actual, pipeRoughness_actual);
 
-                  pressureLinePipeFrictionPa += calculateFrictionLoss(lambda_pressure_line, pipeL, pipeD_actual, fluid.density, v_segment); // Используем lambda линии, но фактический D и v сегмента
-                  pressureLinePipeLocalPa += calculateLocalLoss(pipeProps?.localResistanceCoeff || 0, fluid.density, v_segment); // Только ξ самой трубы
-              });
-              pressureLinePipeLocalPa += calculateLocalLoss(1.5, fluid.density, v_pressure); // Добавляем общие 1.5 для линии
-              console.log(`[${systemType.toUpperCase()}] Pressure Line PIPE Totals: V_avg=${v_pressure.toFixed(3)} m/s, ΣΔPf=${pressureLinePipeFrictionPa.toFixed(0)}Pa, ΣΔPl (pipes+line)=${pressureLinePipeLocalPa.toFixed(0)}Pa`);
-          } else if (cylinder) {
-              console.warn(`[${systemType.toUpperCase()}] No pipes found on pressure line path. Using default values for losses.`);
-              v_pressure = calculateVelocity(pumpFlowM3s, DEFAULT_PIPE_DIAMETER);
-              pressureLinePipeLocalPa = calculateLocalLoss(1.5, fluid.density, v_pressure); // Только общие для линии
-          }
-          results.velocities.pressure = parseFloat(v_pressure.toFixed(3));
+                      const frictionLossSegment = calculateFrictionLoss(lambda_segment, pipeL_actual, pipeD_actual, fluid.density, v_segment);
+                      const localLossSegment = calculateLocalLoss(pipeLocalZeta_actual, fluid.density, v_segment);
+                      totalFrictionLossPa += frictionLossSegment;
+                      totalLocalLossFromPipesPa += localLossSegment;
+                      console.log(`  [${lineName} Pipe Seg] ${pipe.name}: V=${v_segment.toFixed(3)}, Re=${re_segment.toFixed(0)}, λ=${lambda_segment.toFixed(4)}, ΔPf=${frictionLossSegment.toFixed(0)}Pa, ΔPl=${localLossSegment.toFixed(0)}Pa`);
+                  });
+                  totalLocalLossFromPipesPa += calculateLocalLoss(defaultLineZeta, fluid.density, avgVelocityForLineLog); // Общие для линии
+              } else if (lineName === "Pressure" && cylinder || lineName === "Drain" && cylinder ) {
+                  avgVelocityForLineLog = calculateVelocity(flowM3s, DEFAULT_PIPE_DIAMETER);
+                  totalLocalLossFromPipesPa = calculateLocalLoss(defaultLineZeta, fluid.density, avgVelocityForLineLog);
+                  console.warn(`[${systemType.toUpperCase()}] No pipes found on ${lineName} line. Using default local losses for line.`);
+              }
+              results.velocities[lineName.toLowerCase()] = parseFloat(avgVelocityForLineLog.toFixed(3));
+              return { friction: totalFrictionLossPa, local: totalLocalLossFromPipesPa };
+          };
+
+          // -- Напорная линия --
+          const pressureLosses = lineCalculations('Pressure', pressureLinePathModules, pumpFlowM3s, 1.5);
+          pressureLinePipeFrictionPa = pressureLosses.friction;
+          pressureLinePipeLocalPa = pressureLosses.local;
           results.losses.friction.pressurePa = parseFloat(pressureLinePipeFrictionPa.toFixed(0));
           results.losses.local.pressurePa = parseFloat(pressureLinePipeLocalPa.toFixed(0));
+          console.log(`[${systemType.toUpperCase()}] Pressure Line PIPE Totals: ΣΔPf=${pressureLinePipeFrictionPa.toFixed(0)}Pa, ΣΔPl_total_pipes_and_line=${pressureLinePipeLocalPa.toFixed(0)}Pa`);
 
-
-          // -- Сливная линия (трубы) --
-          let v_drain = 0;
+          // -- Сливная линия --
           let drainFlowM3s = pumpFlowM3s;
           if (cylinder && cylinder.properties) {
               const D_piston = cylinder.properties.pistonDiameter; const d_rod = cylinder.properties.rodDiameter;
               if (D_piston && D_piston > 0) {
                   const pistonArea = Math.PI * Math.pow(D_piston/2,2); const rodArea = Math.PI * Math.pow(d_rod/2,2);
-                  drainFlowM3s = pumpFlowM3s * (pistonArea - rodArea) / pistonArea;
+                  if (pistonArea > rodArea) { // Проверка, что шток меньше поршня
+                    drainFlowM3s = pumpFlowM3s * (pistonArea - rodArea) / pistonArea;
+                  } else {
+                    drainFlowM3s = pumpFlowM3s; // Если геометрия некорректна, используем поток насоса
+                    console.warn(`[${systemType.toUpperCase()}] Invalid cylinder geometry (rod >= piston). Using pump flow for drain.`);
+                  }
                   console.log(`[${systemType.toUpperCase()}] Calculated drain flow from cylinder: ${drainFlowM3s.toExponential(3)} m³/s (${(drainFlowM3s*60000).toFixed(2)} L/min)`);
               } else { console.warn(`[${systemType.toUpperCase()}] Cylinder piston diameter invalid for drain flow. Using pump flow.`); }
           }
-          let drainPipeDiameterForLambda = DEFAULT_PIPE_DIAMETER;
-          let drainRoughnessForLambda = DEFAULT_PIPE_ROUGHNESS;
-          let drainLineTotalLocalZetaFromPipes = 0;
-
-          const pipesOnDrainPath = drainLinePathModules.filter(m => m.type === 'pipe');
-          if (pipesOnDrainPath.length > 0) {
-              console.log(`[${systemType.toUpperCase()}] Drain line path pipes:`, pipesOnDrainPath.map(p => p.name));
-              drainPipeDiameterForLambda = pipesOnDrainPath[0].properties?.diameter || DEFAULT_PIPE_DIAMETER;
-              drainRoughnessForLambda = pipesOnDrainPath[0].properties?.roughness || DEFAULT_PIPE_ROUGHNESS;
-              console.log(`[${systemType.toUpperCase()}] Drain line using Ø${(drainPipeDiameterForLambda*1000).toFixed(0)}mm from ${pipesOnDrainPath[0].name} for Lambda calc.`);
-
-              v_drain = calculateVelocity(drainFlowM3s, drainPipeDiameterForLambda); // Общая скорость по первому диаметру
-              const re_drain_line = calculateReynoldsNumber(v_drain, drainPipeDiameterForLambda, fluid.kinematicViscosityM2s);
-              const lambda_drain_line = calculateLambda(re_drain_line, drainPipeDiameterForLambda, drainRoughnessForLambda);
-
-              pipesOnDrainPath.forEach(pipe => {
-                  const pipeProps = pipe.properties;
-                  const pipeL = pipeProps?.length || DEFAULT_PIPE_LENGTH;
-                  const pipeD_actual = pipeProps?.diameter || DEFAULT_PIPE_DIAMETER;
-                  const v_seg = calculateVelocity(drainFlowM3s, pipeD_actual);
-
-                  drainLinePipeFrictionPa += calculateFrictionLoss(lambda_drain_line, pipeL, pipeD_actual, fluid.density, v_seg);
-                  drainLinePipeLocalPa += calculateLocalLoss(pipeProps?.localResistanceCoeff || 0, fluid.density, v_seg);
-              });
-              drainLinePipeLocalPa += calculateLocalLoss(1.0, fluid.density, v_drain); // Общие 1.0 для линии
-              console.log(`[${systemType.toUpperCase()}] Drain Line PIPE Totals: V_avg=${v_drain.toFixed(3)} m/s, ΣΔPf=${drainLinePipeFrictionPa.toFixed(0)}Pa, ΣΔPl (pipes+line)=${drainLinePipeLocalPa.toFixed(0)}Pa`);
-          } else if (cylinder) {
-              console.warn(`[${systemType.toUpperCase()}] No pipes found on drain line path. Using default values for losses.`);
-              v_drain = calculateVelocity(drainFlowM3s, DEFAULT_PIPE_DIAMETER);
-              drainLinePipeLocalPa = calculateLocalLoss(1.0, fluid.density, v_drain);
-          }
-          results.velocities.drain = parseFloat(v_drain.toFixed(3));
+          const drainLosses = lineCalculations('Drain', drainLinePathModules, drainFlowM3s, 1.0);
+          drainLinePipeFrictionPa = drainLosses.friction;
+          drainLinePipeLocalPa = drainLosses.local;
           results.losses.friction.drainPa = parseFloat(drainLinePipeFrictionPa.toFixed(0));
           results.losses.local.drainPa = parseFloat(drainLinePipeLocalPa.toFixed(0));
+          console.log(`[${systemType.toUpperCase()}] Drain Line PIPE Totals: ΣΔPf=${drainLinePipeFrictionPa.toFixed(0)}Pa, ΣΔPl_total_pipes_and_line=${drainLinePipeLocalPa.toFixed(0)}Pa`);
 
 
           // --- Потери в компонентах ---
@@ -636,15 +622,17 @@ app.post('/api/calculate-hydraulics', (req, res) => {
                   const nominalCompFlowM3s = nominalCompFlowLmin / 60000;
                   let actualFlowThroughCompM3s = pumpFlowM3s;
                   if (cylinder && drainPathCompInstanceIds.includes(comp.instanceId)) { actualFlowThroughCompM3s = drainFlowM3s; }
-                  const lossPa = nominalLossMPa * 1e6 * Math.pow(actualFlowThroughCompM3s / nominalCompFlowM3s, 2);
+                  // Предотвращаем деление на 0, если номинальный поток компонента 0
+                  const lossPa = nominalCompFlowM3s > 0 ? nominalLossMPa * 1e6 * Math.pow(actualFlowThroughCompM3s / nominalCompFlowM3s, 2) : nominalLossMPa * 1e6;
                   if (pressurePathCompInstanceIds.includes(comp.instanceId)) { pressureLineComponentLossPa += lossPa; }
                   else if (drainPathCompInstanceIds.includes(comp.instanceId)) { drainLineComponentLossPa += lossPa; }
                   else { pressureLineComponentLossPa += lossPa; console.warn(`[${systemType.toUpperCase()}] Common component ${comp.name} loss added to pressure line.`); }
                   console.log(`[${systemType.toUpperCase()}] Loss for ${comp.name}: ${(lossPa/1e6).toFixed(3)} MPa (Nom. Loss: ${nominalLossMPa} MPa at ${nominalCompFlowLmin} L/min, Actual Flow: ${(actualFlowThroughCompM3s*60000).toFixed(1)} L/min)`);
               } else if (nominalLossMPa > 0) {
-                  if (pressurePathCompInstanceIds.includes(comp.instanceId)) { pressureLineComponentLossPa += nominalLossMPa * 1e6; }
-                  else if (drainPathCompInstanceIds.includes(comp.instanceId)) { drainLineComponentLossPa += nominalLossMPa * 1e6; }
-                  else { pressureLineComponentLossPa += nominalLossMPa * 1e6; }
+                  const lossPa = nominalLossMPa * 1e6;
+                  if (pressurePathCompInstanceIds.includes(comp.instanceId)) { pressureLineComponentLossPa += lossPa; }
+                  else if (drainPathCompInstanceIds.includes(comp.instanceId)) { drainLineComponentLossPa += lossPa; }
+                  else { pressureLineComponentLossPa += lossPa; }
                   console.warn(`[${systemType.toUpperCase()}] Using nominal loss for ${comp.name} (${nominalLossMPa} MPa) due to missing nominalFlowLmin.`);
               }
           });
@@ -662,9 +650,8 @@ app.post('/api/calculate-hydraulics', (req, res) => {
 
           // --- Расчет требуемого давления насоса ---
           let requiredPumpPressurePa = pump.properties?.nominalPressureMPa ? pump.properties.nominalPressureMPa * 1e6 : 16e6;
-          let actualCylinderPressurePa = 0;
           if (cylinder) {
-              actualCylinderPressurePa = calculateCylinderPressure(cylinder, totalDrainLineLosses);
+              const actualCylinderPressurePa = calculateCylinderPressure(cylinder, totalDrainLineLosses);
               requiredPumpPressurePa = actualCylinderPressurePa + totalPressureLineLosses;
               console.log(`[${systemType.toUpperCase()}] Cylinder required pressure: ${(actualCylinderPressurePa / 1e6).toFixed(3)} MPa`);
               console.log(`[${systemType.toUpperCase()}] Pump required pressure: ${(requiredPumpPressurePa / 1e6).toFixed(3)} MPa`);
@@ -685,7 +672,7 @@ app.post('/api/calculate-hydraulics', (req, res) => {
 
           // --- Расчет выделяемого тепла ---
           const pumpTotalEfficiency = pump.properties.volumetricEff * pump.properties.mechEff;
-          const pumpPowerKw = pumpTotalEfficiency > 0 ? (requiredPumpPressurePa * pumpFlowM3s) / pumpTotalEfficiency / 1000 : 0;
+          const pumpPowerKw = pumpTotalEfficiency > 0 && requiredPumpPressurePa > 0 ? (requiredPumpPressurePa * pumpFlowM3s) / pumpTotalEfficiency / 1000 : 0;
           results.pumpPowerKw = parseFloat(pumpPowerKw.toFixed(3));
           const heatGeneratedKw = pumpPowerKw * (1 - results.systemEfficiency);
           results.heatGeneratedKw = parseFloat(heatGeneratedKw.toFixed(3));
@@ -754,7 +741,7 @@ app.post('/api/calculate-hydraulics', (req, res) => {
 
       // --- 7. Формирование ответа ---
       res.status(200).json({
-          message: "Hydraulic calculation with cylinder pressure, pump pressure demand, and corrected component losses.",
+          message: "Hydraulic calculation with detailed line losses, component losses correction, and cylinder pressure demand.",
           calculatedSteadyStateTempC: finalTemp,
           requiredTankArea: parseFloat(requiredTankArea.toFixed(4)),
           currentTankArea: parseFloat(tankHeatDissipationArea.toFixed(4)),
@@ -767,7 +754,6 @@ app.post('/api/calculate-hydraulics', (req, res) => {
       res.status(500).json({ error: error.message || "An unexpected server error occurred during calculation." });
     }
 }); // Конец обработчика
-
 
 
   

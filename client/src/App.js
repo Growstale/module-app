@@ -31,16 +31,83 @@ function App() {
         };
     
         switch (item.id) {
-case 'distributor_rge100':
-         defaultProps = {
-          ...defaultProps,
-          pressureDrop: 1.5,     // МПа, номинальный перепад
-          internalLeakage: 0.02, // л/мин
-          sideSurfaceArea: 0.32, // м²
-          nominalFlowLmin: 100,  // л/мин, ПРИМЕР! Нужно найти реальное значение для RGE100
-          color: '#ff9800',
-        };
-        break;
+          case 'engine_d245':
+            defaultProps = {
+              ...defaultProps,
+              idleRpm: 750,
+              nominalRpm: 2200,
+              maxTorqueRpm: 1600,
+              selectedRpmMode: 'nominalRpm', // По умолчанию используем номинальные обороты
+              color: '#f44336', // Красный для двигателя
+            };
+            break;
+          case 'tank':
+            defaultProps = {
+              ...defaultProps,
+              length: 0.695,
+              width: 0.36,
+              height: 0.445,
+              color: '#e0e0e0', // Светло-серый для бака
+            };
+            break;
+          case 'pump_gns_ap30':
+            defaultProps = {
+              ...defaultProps,
+              workingVolume: 43,
+              volumetricEff: 0.92,
+              driveRatio: 0.866,
+              mechEff: 0.85,
+              sideSurfaceArea: 0.0776,
+              color: '#4caf50', // Зеленый для насоса ГНС
+            };
+            break;
+          case 'pump_gru_nsh10':
+            defaultProps = {
+              ...defaultProps,
+              workingVolume: 10,
+              volumetricEff: 0.92,
+              driveRatio: 1,
+              mechEff: 0.85,
+              sideSurfaceArea: 0.0412,
+              color: '#2196f3', // Синий для насоса ГРУ
+            };
+            break;
+          case 'cylinder_znu_c63':
+            defaultProps = {
+              ...defaultProps,
+              pistonDiameter: 0.063,
+              rodDiameter: 0.04,
+              stroke: 0.2,
+              force: 39923.4,
+              mechEff: 0.95,
+              volEff: 0.99,
+              sideSurfaceArea: 0.086,
+              color: '#8bc34a', // Светло-зеленый для цилиндра ЗНУ
+            };
+            break;
+          case 'cylinder_gru_c70':
+            defaultProps = {
+              ...defaultProps,
+              pistonDiameter: 0.07,
+              rodDiameter: 0.06,
+              stroke: 0.007, // Внимание: Значение из CSV, возможно, требует уточнения
+              force: 12246,
+              mechEff: 0.98,
+              volEff: 0.99,
+              sideSurfaceArea: 0, // Данных нет в CSV для Ц70
+              color: '#03a9f4', // Светло-синий для цилиндра ГРУ
+            };
+            break;
+            case 'distributor_rge100':
+                defaultProps = {
+                ...defaultProps,
+                pressureDrop: 1.5,     // МПа, номинальный перепад
+                internalLeakage: 0.02, // л/мин
+                sideSurfaceArea: 0.32, // м²
+                nominalFlowLmin: 100,  // л/мин, ПРИМЕР! Нужно найти реальное значение для RGE100
+                color: '#ff9800',
+            };
+            break;
       case 'power_block_bpg': // Блок питания
          defaultProps = {
           ...defaultProps,
@@ -71,13 +138,29 @@ case 'distributor_rge100':
           color: '#ffeb3b',
         };
         break;
-      case 'pipe':
-        defaultProps = { /* ... как было ... */ };
+            case 'pipe':
+                defaultProps = {
+                  ...defaultProps,
+                  diameter: 0.020, // Внутренний диаметр по умолчанию, м (20мм)
+                  length: 1.0,      // Длина по умолчанию, м
+                  roughness: 0.00005, // Абсолютная шероховатость, м (50 мкм для новых стальных) - ПРИМЕР
+                  localResistanceCoeff: 0, // Сумма коэфф. местных сопротивлений на ЭТОМ участке трубы (ξ) - ПРИМЕР
+                  color: '#607d8b', // Сине-серый для трубы
+                };
+                break;    
+              case 'tee_splitter':
+        defaultProps = {
+          ...defaultProps,
+          pressureDrop: 0.01, // Очень малый номинальный перепад, МПа (ПРИМЕР)
+          nominalFlowLmin: 200, // Большой номинальный поток, л/мин (ПРИМЕР)
+          // Утечек у пассивного тройника обычно нет
+          color: '#757575', // Темно-серый для тройника
+        };
         break;
-    }
-    return defaultProps;
-  };
- 
+    
+        }
+        return defaultProps;
+      };    
 
     const handleDrop = useCallback((item, offset) => {
       if (item.instanceId) {
