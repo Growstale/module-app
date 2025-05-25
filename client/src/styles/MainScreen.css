@@ -1,21 +1,15 @@
-/* В MainScreen.css или App.css */
 .draggable-module {
-  /* position: absolute; - остается в JS */
-  /* width/height - остаются в JS */
-  /* backgroundColor - остается в JS */
-  /* color - лучше подбирать динамически или убрать 'white' */
   padding: 10px;
-  border: 1px solid #ccc; /* Мягкая граница по умолчанию */
-  border-radius: 6px; /* Скругление */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Легкая тень */
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   cursor: grab;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease; /* Плавность */
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.9em;
   box-sizing: border-box;
-  /* Можно добавить иконку перед текстом */
 }
 
 .draggable-module:hover {
@@ -26,15 +20,14 @@
 .draggable-module.type-start,
 .draggable-module.type-end {
   border-width: 2px;
-  border-color: gold; /* Или другой цвет для выделения */
+  border-color: gold;
 }
 
-/* Стили для портов */
 .draggable-module .port {
   position: absolute;
-  width: 14px; /* Чуть больше */
+  width: 14px;
   height: 14px;
-  background-color: #f0f0f0; /* Светлее */
+  background-color: #f0f0f0;
   border: 1px solid #aaa;
   border-radius: 50%;
   z-index: 1;
@@ -43,33 +36,39 @@
 }
 
 .draggable-module .port:hover {
-   background-color: #ddd;
-   border-color: #333;
+  background-color: #ddd;
+  border-color: #333;
 }
 
 .draggable-module .output-port {
   top: 50%;
-  right: -7px; /* Половина ширины */
+  right: -7px;
   transform: translateY(-50%);
   cursor: crosshair;
 }
-.draggable-module .output-port.busy { /* Добавить класс .busy если порт занят */
+
+.draggable-module .output-port.busy {
   background-color: lightcoral;
   cursor: not-allowed;
 }
 
-
 .draggable-module .input-port {
   top: 50%;
-  left: -7px; /* Половина ширины */
+  left: -7px;
   transform: translateY(-50%);
   cursor: default;
 }
-.draggable-module .input-port.busy { /* Добавить класс .busy если порт занят */
+
+.draggable-module .input-port.busy {
   background-color: lightcoral;
-   cursor: not-allowed;
+  cursor: not-allowed;
 }
-.draggable-module .input-port.is-over { /* Класс при наведении линии */
+
+.draggable-module .input-port.is-over {
   background-color: lightgreen;
   border-color: green;
+}
+
+.draggable-module.selected {
+  box-shadow: 0 0 10px rgba(30, 144, 255, 0.7);
 }

@@ -1,0 +1,79 @@
+.results-display-container {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.results-display-container h3 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.system-card {
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.system-card h4 {
+    margin-top: 0;
+    color: #0056b3;
+}
+
+.system-summary ul {
+    list-style-type: none;
+    padding-left: 15px;
+}
+
+.system-summary ul li {
+    margin-bottom: 3px;
+    font-size: 0.9em;
+}
+
+.branch-card {
+    background-color: #f0f8ff;
+    border: 1px solid #b0e0e6;
+    border-radius: 3px;
+    padding: 8px;
+    margin-top: 10px;
+    margin-left: 15px;
+}
+
+.branch-card h5 {
+    margin-top: 0;
+    color: #206040;
+    font-size: 1.1em;
+}
+
+.branch-card h6 {
+    margin-top: 0;
+    color: #2E8B57;
+    font-size: 1em;
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+}
+
+.branch-card p,
+.branch-card ul li {
+    font-size: 0.85em;
+    margin-bottom: 4px;
+}
+
+.cylinder-details {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #ddd;
+}
+
+.cylinder-details p strong {
+    color: #555;
+}

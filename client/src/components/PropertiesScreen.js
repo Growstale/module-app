@@ -1,238 +1,316 @@
-// PropertiesScreen.js
 import React, { useState, useEffect } from 'react';
-import '../styles/PropertiesScreen.css'; // Убедитесь, что стили подключены
+import '../styles/PropertiesScreen.css';
 
-const PropertiesScreen = ({ selectedModule, updateModuleProperties, onDeleteModule }) => {
+const PropertiesScreen = ({ selectedModule, updateModuleProperties, onDeleteModule, detailedResults, getDefaultProperties }) => {
   const [properties, setProperties] = useState({});
-  const [moduleName, setModuleName] = useState(''); // Для отображения имени
+  const [moduleName, setModuleName] = useState('');
+  const [calculatedCylinderParams, setCalculatedCylinderParams] = useState(null);
 
-  // Обновляем локальное состояние при изменении выбранного модуля
   useEffect(() => {
     if (selectedModule) {
       setProperties(selectedModule.properties || {});
       setModuleName(selectedModule.name || '');
+      let foundParams = null;
+      if (selectedModule.type === 'cylinder' && detailedResults) {
+        for (const systemKey in detailedResults) {
+          const systemData = detailedResults[systemKey];
+          if (systemData.branches) {
+            for (const branchKey in systemData.branches) {
+              const branchData = systemData.branches[branchKey];
+              if (
+                branchData.cylinderCalculatedParams &&
+                String(branchData.cylinderCalculatedParams.cylinderInstanceId) === String(selectedModule.instanceId)
+              ) {
+                foundParams = branchData.cylinderCalculatedParams;
+                break;
+              }
+            }
+          }
+          if (foundParams) break;
+        }
+      }
+      setCalculatedCylinderParams(foundParams);
     } else {
-      // Сбрасываем при отсутствии выбранного модуля
       setProperties({});
       setModuleName('');
+      setCalculatedCylinderParams(null);
     }
-  }, [selectedModule]);
+  }, [selectedModule, detailedResults]);
 
-  // Обработчик изменений в полях ввода
   const handlePropertyChange = (e) => {
     const { name, value, type, checked } = e.target;
     let processedValue;
 
-    if (type === 'number') {
-      // Преобразуем в число, обрабатываем пустую строку как 0
-      processedValue = parseFloat(value) || 0;
-    } else if (type === 'checkbox') {
+    if (type === 'checkbox') {
       processedValue = checked;
-    } else { // Для text, color, radio и др.
+    } else if (type === 'number') {
+      const numValue = parseFloat(value);
+      if (name === 'volumetricEff' || name === 'mechEff' || name === 'volEff') {
+        if (numValue < 0) processedValue = 0;
+        else if (numValue > 1) processedValue = 1;
+        else processedValue = numValue || 0;
+      } else if (
+        [
+          'workingVolume', 'force', 'idleRpm', 'nominalRpm', 'maxTorqueRpm', 'driveRatio',
+          'pistonDiameter', 'rodDiameter', 'stroke', 'pressureDrop', 'nominalFlowLmin',
+          'internalLeakage', 'sideSurfaceArea', 'filtrationRate', 'length', 'diameter',
+          'roughness', 'localResistanceCoeff', 'nominalPressureMPa'
+        ].includes(name)
+      ) {
+        processedValue = Math.max(0, numValue || 0);
+      } else {
+        processedValue = numValue || 0;
+      }
+    } else {
       processedValue = value;
     }
-
-    // Обновляем локальное состояние свойств
     setProperties(prevProps => ({
       ...prevProps,
       [name]: processedValue
     }));
   };
 
-  // Сохранение изменений
   const handleSave = () => {
     if (selectedModule) {
       updateModuleProperties(selectedModule.instanceId, properties);
-      alert(`Properties for "${moduleName}" saved!`); // Уведомление пользователю
+      alert(`Properties for "${moduleName}" saved!`);
     }
   };
 
-  // Удаление модуля
   const handleDelete = () => {
     if (selectedModule && onDeleteModule) {
+      if (selectedModule.type === 'engine_input' || selectedModule.type === 'tank_output') {
+        alert(`Module "${moduleName}" cannot be deleted.`);
+        return;
+      }
       if (window.confirm(`Are you sure you want to delete the module "${moduleName}"? This action cannot be undone.`)) {
         onDeleteModule(selectedModule.instanceId);
       }
     }
   };
 
-  // --- Вспомогательная функция для рендеринга полей ввода ---
-  const renderInputField = (label, name, unit = '', type = 'number', step = 'any', props = {}) => (
-    <div key={name} className="property-field">
+  const handleResetToDefaults = () => {
+    if (selectedModule && getDefaultProperties) {
+      const defaultProps = getDefaultProperties(selectedModule);
+      setProperties(defaultProps);
+    }
+  };
+
+  const renderInputField = (label, name, unit = '', type = 'number', step = 'any', props = {}, tooltipText = '') => (
+    <div key={name} className="property-field" title={tooltipText || label}>
       <label htmlFor={`prop-${name}`}>{label}:</label>
       <div className="input-wrapper">
         <input
           type={type}
           id={`prop-${name}`}
           name={name}
-          // Используем ?? для обработки null/undefined, устанавливаем дефолтное значение
           value={properties[name] ?? (type === 'number' ? 0 : (type === 'color' ? '#9e9e9e' : ''))}
           onChange={handlePropertyChange}
           step={step}
-          {...props} // Дополнительные атрибуты (min, max и т.д.)
+          {...props}
         />
         {unit && <span className="unit">{unit}</span>}
       </div>
     </div>
   );
 
-   // --- Вспомогательная функция для радиокнопок ---
-  const renderRadioGroup = (groupLabel, name, options) => (
-      <div key={name} className="property-field radio-group">
-          <label className="group-label">{groupLabel}:</label>
-          <div className="radio-options">
-              {options.map(opt => (
-                  <label key={opt.value} htmlFor={`prop-${name}-${opt.value}`}>
-                      <input
-                          type="radio"
-                          id={`prop-${name}-${opt.value}`}
-                          name={name}
-                          value={opt.value}
-                          // Проверяем, соответствует ли текущее значение свойству
-                          checked={properties[name] === opt.value}
-                          onChange={handlePropertyChange}
-                      />
-                      {opt.label}
-                  </label>
-              ))}
-          </div>
+  const renderRadioGroup = (groupLabel, name, options, tooltipText = '') => (
+    <div key={name} className="property-field radio-group" title={tooltipText || groupLabel}>
+      <label className="group-label">{groupLabel}:</label>
+      <div className="radio-options">
+        {options.map(opt => (
+          <label key={opt.value} htmlFor={`prop-${name}-${opt.value}`}>
+            <input
+              type="radio"
+              id={`prop-${name}-${opt.value}`}
+              name={name}
+              value={opt.value}
+              checked={properties[name] === opt.value}
+              onChange={handlePropertyChange}
+            />
+            {opt.label}
+          </label>
+        ))}
       </div>
+    </div>
   );
 
+  const renderPropertyGroupTitle = (title) => (
+    <h4 className="property-group-title">{title}</h4>
+  );
 
-  // Если модуль не выбран, показываем заглушку
   if (!selectedModule) {
     return <div className="properties-screen">Select a module to configure</div>;
   }
 
-  // --- Функция для рендеринга набора свойств в зависимости от ID модуля ---
   const renderProperties = () => {
     switch (selectedModule.id) {
       case 'engine_d245':
         return (
           <>
-            {renderInputField('Обороты ХХ (Nхх)', 'idleRpm', 'об/мин')}
-            {renderInputField('Ном. обороты (Nном)', 'nominalRpm', 'об/мин')}
-            {renderInputField('Обороты макс. момента (Nmax)', 'maxTorqueRpm', 'об/мин')}
+            {renderPropertyGroupTitle('Параметры двигателя')}
+            {renderInputField('Обороты ХХ (Nхх)', 'idleRpm', 'об/мин', 'number', 'any', { min: 0 }, "Обороты холостого хода двигателя")}
+            {renderInputField('Ном. обороты (Nном)', 'nominalRpm', 'об/мин', 'number', 'any', { min: 0 }, "Номинальные обороты двигателя")}
+            {renderInputField('Обороты макс. момента (Nmax)', 'maxTorqueRpm', 'об/мин', 'number', 'any', { min: 0 }, "Обороты двигателя при максимальном крутящем моменте")}
             {renderRadioGroup('Режим для расчета', 'selectedRpmMode', [
-                { value: 'idleRpm', label: 'ХХ' },
-                { value: 'nominalRpm', label: 'Ном.' },
-                { value: 'maxTorqueRpm', label: 'Макс. момент' }
-            ])}
+              { value: 'idleRpm', label: 'ХХ' },
+              { value: 'nominalRpm', label: 'Ном.' },
+              { value: 'maxTorqueRpm', label: 'Макс. момент' }
+            ], "Выберите режим работы двигателя для текущего расчета")}
           </>
         );
       case 'tank':
         return (
           <>
-            {renderInputField('Длина (L)', 'length', 'м')}
-            {renderInputField('Ширина (S)', 'width', 'м')}
-            {renderInputField('Высота (H)', 'height', 'м')}
+            {renderPropertyGroupTitle('Геометрические параметры бака')}
+            {renderInputField('Длина (L)', 'length', 'м', 'number', 'any', { min: 0 }, "Длина гидробака")}
+            {renderInputField('Ширина (S)', 'width', 'м', 'number', 'any', { min: 0 }, "Ширина гидробака")}
+            {renderInputField('Высота (H)', 'height', 'м', 'number', 'any', { min: 0 }, "Общая высота гидробака")}
           </>
         );
       case 'pump_gns_ap30':
       case 'pump_gru_nsh10':
         return (
           <>
-            {renderInputField('Рабочий объем (Vн)', 'workingVolume', 'см³/об')}
-            {renderInputField('Объемный КПД (ηv)', 'volumetricEff', '', 'number', '0.01', { min: 0, max: 1 })}
-            {renderInputField('Мех. КПД (ηм)', 'mechEff', '', 'number', '0.01', { min: 0, max: 1 })}
-            {renderInputField('Передаточное число (i)', 'driveRatio', '')}
-            {renderInputField('Площадь пов. (тепло), м²', 'sideSurfaceArea', 'м²')}
+            {renderPropertyGroupTitle('Основные параметры насоса')}
+            {renderInputField('Рабочий объем (Vн)', 'workingVolume', 'см³/об', 'number', 'any', { min: 0 }, "Объем жидкости, вытесняемый насосом за один оборот")}
+            {renderInputField('Передаточное число (i)', 'driveRatio', '', 'number', 'any', { min: 0 }, "Передаточное число привода насоса от двигателя")}
+            {renderInputField('Номинальное давление', 'nominalPressureMPa', 'МПа', 'number', 'any', { min: 0 }, "Номинальное рабочее давление насоса (для справки)")}
+            {renderPropertyGroupTitle('Эффективность насоса')}
+            {renderInputField('Объемный КПД (ηv)', 'volumetricEff', '', 'number', '0.01', { min: 0, max: 1 }, "Объемный коэффициент полезного действия")}
+            {renderInputField('Мех. КПД (ηм)', 'mechEff', '', 'number', '0.01', { min: 0, max: 1 }, "Механический коэффициент полезного действия")}
+            {renderPropertyGroupTitle('Тепловые параметры насоса')}
+            {renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²', 'number', 'any', { min: 0 }, "Площадь боковой поверхности насоса для теплообмена")}
           </>
         );
       case 'cylinder_znu_c63':
       case 'cylinder_gru_c70':
-         return (
+        return (
           <>
-            {renderInputField('Диаметр поршня (D)', 'pistonDiameter', 'м')}
-            {renderInputField('Диаметр штока (d)', 'rodDiameter', 'м')}
-            {renderInputField('Ход поршня (S)', 'stroke', 'м')}
-            {renderInputField('Требуемое усилие (F)', 'force', 'Н')}
-            {renderInputField('Мех. КПД (ηгм)', 'mechEff', '', 'number', '0.01', { min: 0, max: 1 })}
-            {renderInputField('Объемный КПД (ηоц)', 'volEff', '', 'number', '0.01', { min: 0, max: 1 })}
-            {/* Площадь показываем только если она задана */}
-            {(selectedModule.properties?.sideSurfaceArea !== undefined) && renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²')}
+            {renderPropertyGroupTitle('Геометрические параметры цилиндра')}
+            {renderInputField('Диаметр поршня (D)', 'pistonDiameter', 'м', 'number', 'any', { min: 0 }, "Внутренний диаметр гильзы цилиндра")}
+            {renderInputField('Диаметр штока (d)', 'rodDiameter', 'м', 'number', 'any', { min: 0 }, "Диаметр штока цилиндра (0, если без штока со стороны слива)")}
+            {renderInputField('Ход поршня (S)', 'stroke', 'м', 'number', 'any', { min: 0 }, "Максимальное перемещение поршня")}
+            {renderPropertyGroupTitle('Рабочие параметры цилиндра')}
+            {renderInputField('Требуемое усилие (F)', 'force', 'Н', 'number', 'any', { min: 0 }, "Усилие, которое должен развить шток цилиндра")}
+            {renderPropertyGroupTitle('Эффективность цилиндра')}
+            {renderInputField('Мех. КПД (ηгм)', 'mechEff', '', 'number', '0.01', { min: 0, max: 1 }, "Механический КПД гидроцилиндра (учет трения)")}
+            {renderInputField('Объемный КПД (ηоц)', 'volEff', '', 'number', '0.01', { min: 0, max: 1 }, "Объемный КПД гидроцилиндра (учет внутренних перетечек)")}
+            {renderPropertyGroupTitle('Тепловые параметры цилиндра')}
+            {(selectedModule.properties?.sideSurfaceArea !== undefined) && renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²', 'number', 'any', { min: 0 }, "Площадь поверхности цилиндра для теплообмена")}
           </>
         );
-       // Комбинируем рендеринг для схожих блоков
-       case 'distributor_rge100':
-       case 'power_block_bpg':
-       case 'hydro_block_gbf':
-         return (
+      case 'distributor_rge100':
+      case 'power_block_bpg':
+      case 'hydro_block_gbf':
+        return (
           <>
-            {renderInputField('Перепад давления (ΔРа)', 'pressureDrop', 'МПа')}
-            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин')}
-            {renderInputField('Внутренние утечки (Qут)', 'internalLeakage', 'л/мин', 'any', { min: 0 })}
-            {renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²')}
+            {renderPropertyGroupTitle('Гидравлические параметры')}
+            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа', 'number', 'any', { min: 0 }, "Номинальный перепад давления на компоненте при номинальном расходе")}
+            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин', 'number', 'any', { min: 0 }, "Номинальный расход, при котором указан перепад давления")}
+            {renderInputField('Внутренние утечки (Qут)', 'internalLeakage', 'л/мин', 'number', 'any', { min: 0 }, "Объем внутренних перетечек в компоненте при номинальном давлении")}
+            {renderPropertyGroupTitle('Тепловые параметры')}
+            {renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²', 'number', 'any', { min: 0 }, "Площадь поверхности компонента для теплообмена")}
           </>
         );
       case 'filter_frc12':
-         return (
-          <>
-            {renderInputField('Перепад давления (ΔРа)', 'pressureDrop', 'МПа')}
-            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин')}
-            {renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²')}
-            {renderInputField('Тонкость фильтрации', 'filtrationRate', 'мкм')}
-          </>
-        );
-        case 'pipe':
-            return (
-              <>
-                {renderInputField('Внутр. диаметр (d)', 'diameter', 'м', 'number', '0.001')}
-                {renderInputField('Длина (l)', 'length', 'м')}
-                {renderInputField('Шероховатость (Δ)', 'roughness', 'м', 'number', '0.00001')}
-                {renderInputField('Коэф. мест. сопротивл. (ξ)', 'localResistanceCoeff', '', 'number', '0.1')}
-              </>
-            );    
-              case 'tee_splitter':
         return (
           <>
-            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа')}
-            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин')}
-            {/* Можно добавить поля для указания, сколько выходов активно, но это усложнит */}
-            <p>Конфигурация портов определяется соединениями.</p>
+            {renderPropertyGroupTitle('Гидравлические параметры фильтра')}
+            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа', 'number', 'any', { min: 0 }, "Номинальный перепад давления на чистом фильтре при номинальном расходе")}
+            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин', 'number', 'any', { min: 0 }, "Номинальный расход, для которого указан перепад давления")}
+            {renderInputField('Тонкость фильтрации', 'filtrationRate', 'мкм', 'number', 'any', { min: 0 }, "Номинальная тонкость фильтрации")}
+            {renderPropertyGroupTitle('Тепловые параметры фильтра')}
+            {renderInputField('Площадь пов. (тепло)', 'sideSurfaceArea', 'м²', 'number', 'any', { min: 0 }, "Площадь поверхности фильтра для теплообмена")}
+          </>
+        );
+      case 'pipe':
+        return (
+          <>
+            {renderPropertyGroupTitle('Параметры трубопровода')}
+            {renderInputField('Внутр. диаметр (d)', 'diameter', 'м', 'number', '0.00001', { min: 0.001 }, "Внутренний диаметр трубы, метры")}
+            {renderInputField('Длина (l)', 'length', 'м', 'number', '0.01', { min: 0 }, "Длина участка трубы, метры")}
+            {renderInputField('Абс. шероховатость (Δ)', 'roughness', 'м', 'number', '0.000001', { min: 0 }, "Абсолютная шероховатость внутренней поверхности трубы, метры")}
+            {renderInputField('Сумм. коэф. мест. сопротивл. (Σξ)', 'localResistanceCoeff', '', 'number', '0.01', { min: 0 }, "Суммарный коэффициент местных гидравлических сопротивлений для данного участка трубы")}
+          </>
+        );
+      case 'tee_splitter':
+        return (
+          <>
+            {renderPropertyGroupTitle('Параметры тройника')}
+            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа', 'number', 'any', { min: 0 }, "Номинальный перепад давления на тройнике при общем номинальном расходе")}
+            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин', 'number', 'any', { min: 0 }, "Общий номинальный расход, для которого указан перепад давления")}
+            <p><i>Поток делится поровну между активными выходами.</i></p>
+          </>
+        );
+      case 'collector':
+        return (
+          <>
+            {renderPropertyGroupTitle('Параметры коллектора')}
+            {renderInputField('Перепад давления (ΔРа ном.)', 'pressureDrop', 'МПа', 'number', 'any', { min: 0 }, "Номинальный перепад давления на коллекторе при общем номинальном расходе")}
+            {renderInputField('Номинальный расход (Qном.)', 'nominalFlowLmin', 'л/мин', 'number', 'any', { min: 0 }, "Общий номинальный расход, для которого указан перепад давления")}
+            <p><i>Конфигурация портов: 2 входа (слева), 1 выход (справа).</i></p>
           </>
         );
       default:
-        // Если тип модуля неизвестен или для него нет специфичных свойств
         return <p>No specific properties defined for this module.</p>;
     }
   };
 
-  // --- Основной рендер компонента ---
+  const renderCalculatedParam = (label, value, unit = '', precision = 3) => {
+    if (value === undefined || value === null) return null;
+    let displayValue = typeof value === 'number' ? value.toFixed(precision) : value;
+    return (
+      <div className="calculated-param-field">
+        <span className="param-label">{label}:</span>
+        <span className="param-value">{displayValue} {unit}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="properties-screen">
-      <h2>Properties: {moduleName}</h2>
-      <p className="module-info">(ID: {selectedModule.instanceId})</p>
-      <p className="module-info">Type: {selectedModule.type} {selectedModule.system ? `(${selectedModule.system.toUpperCase()})` : ''}</p>
-
-      {/* Общее свойство - Цвет */}
-      {renderInputField('Цвет модуля', 'color', '', 'color')}
-
+      <h2>Свойства: {moduleName}</h2>
+      <p className="module-info">(ID экземпляра: {selectedModule.instanceId})</p>
+      <p className="module-info">Тип: {selectedModule.type} {selectedModule.system ? `(${selectedModule.system.toUpperCase()})` : ''}</p>
+      {renderInputField('Цвет модуля', 'color', '', 'color', undefined, {}, "Выберите цвет для отображения модуля на схеме")}
       <hr />
-
-      {/* Рендеринг специфичных для модуля свойств */}
       <div className="specific-properties">
-         {renderProperties()}
+        {renderProperties()}
       </div>
-
-
+      {selectedModule.type === 'cylinder' && calculatedCylinderParams && (
+        <>
+          <hr />
+          <div className="calculated-parameters-section">
+            {renderPropertyGroupTitle('Расчетные параметры цилиндра')}
+            {renderCalculatedParam('Давление в поршневой полости', calculatedCylinderParams.pistonChamberPressureMPa, 'МПа')}
+            {renderCalculatedParam('Давление в штоковой полости', calculatedCylinderParams.rodChamberPressureMPa, 'МПа')}
+            {renderCalculatedParam('Скорость штока', calculatedCylinderParams.rodSpeedMs, 'м/с', 4)}
+            {renderCalculatedParam('Полезная мощность на штоке', calculatedCylinderParams.usefulPowerKw, 'кВт')}
+            {renderCalculatedParam('Фактический поток в цилиндр', (calculatedCylinderParams.actualFlowToCylinderM3s * 60000), 'л/мин')}
+          </div>
+        </>
+      )}
+      {selectedModule.type === 'cylinder' && !calculatedCylinderParams && detailedResults && (
+        <>
+          <hr />
+          <div className="calculated-parameters-section">
+            {renderPropertyGroupTitle('Расчетные параметры цилиндра')}
+            <p><em>Расчетные данные для этого цилиндра отсутствуют в текущих результатах.</em></p>
+          </div>
+        </>
+      )}
       <hr />
-
-      {/* Кнопки действий */}
       <div className="properties-actions">
-        <button onClick={handleSave} disabled={!selectedModule}>Save Properties</button>
-        <button
-          onClick={handleDelete}
-          disabled={!selectedModule}
-          className="delete-button"
-        >
-          Delete Module
-        </button>
+        <button onClick={handleSave} disabled={!selectedModule}>Сохранить свойства</button>
+        {selectedModule && (
+          <button onClick={handleDelete} className="delete-button">Удалить модуль</button>
+        )}
+        {selectedModule && getDefaultProperties && (
+          <button onClick={handleResetToDefaults} className="reset-button">Сбросить по умолчанию</button>
+        )}
       </div>
-
     </div>
   );
 };
-
 export default PropertiesScreen;

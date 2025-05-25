@@ -1,13 +1,12 @@
 import React from 'react';
-import '../styles/LoadSchemeModal.css'; // Создадим файл стилей для модалки
+import '../styles/LoadSchemeModal.css';
 
 const LoadSchemeModal = ({ isOpen, onClose, schemes, onLoad, isLoading }) => {
     if (!isOpen) {
-        return null; // Не рендерим ничего, если модалка не открыта
+        return null;
     }
 
     const handleOverlayClick = (e) => {
-        // Закрываем по клику на фон (overlay), но не на само окно
         if (e.target === e.currentTarget) {
             onClose();
         }
@@ -15,7 +14,7 @@ const LoadSchemeModal = ({ isOpen, onClose, schemes, onLoad, isLoading }) => {
 
     const handleSchemeClick = (schemeId) => {
         if (window.confirm("Loading a scheme will replace the current diagram. Are you sure?")) {
-             onLoad(schemeId); // Вызываем загрузку, переданную из App.js
+            onLoad(schemeId);
         }
     };
 
@@ -31,8 +30,6 @@ const LoadSchemeModal = ({ isOpen, onClose, schemes, onLoad, isLoading }) => {
                         {schemes.map(scheme => (
                             <li key={scheme._id} onClick={() => !isLoading && handleSchemeClick(scheme._id)} className={isLoading ? 'disabled' : ''}>
                                 {scheme.name}
-                                {/* Можно добавить дату сохранения, если она есть в данных */}
-                                {/* <span>{new Date(scheme.updatedAt).toLocaleString()}</span> */}
                             </li>
                         ))}
                     </ul>

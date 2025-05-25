@@ -1,16 +1,14 @@
-/* LoadSchemeModal.css */
-
 .modal-overlay {
-    position: fixed; /* Поверх всего */
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6); /* Полупрозрачный фон */
+    background-color: rgba(0, 0, 0, 0.6);
     display: flex;
-    align-items: center; /* Центрирование по вертикали */
-    justify-content: center; /* Центрирование по горизонтали */
-    z-index: 1000; /* Выше других элементов */
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
 }
 
 .modal-content {
@@ -19,8 +17,8 @@
     border-radius: 8px;
     min-width: 300px;
     max-width: 500px;
-    max-height: 80vh; /* Ограничение высоты */
-    overflow-y: auto; /* Прокрутка, если список длинный */
+    max-height: 80vh;
+    overflow-y: auto;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
@@ -44,7 +42,7 @@
     cursor: pointer;
     transition: background-color 0.2s ease;
     display: flex;
-    justify-content: space-between; /* Для возможного добавления даты справа */
+    justify-content: space-between;
     align-items: center;
 }
 
@@ -59,7 +57,7 @@
 }
 
 .modal-content button {
-    display: block; /* Кнопка на всю ширину */
+    display: block;
     width: 100%;
     padding: 10px;
     margin-top: 10px;
@@ -68,9 +66,11 @@
     border-radius: 4px;
     cursor: pointer;
 }
+
 .modal-content button:hover {
     background-color: #bbb;
 }
+
 .modal-content button:disabled {
     background-color: #e0e0e0;
     cursor: not-allowed;

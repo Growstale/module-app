@@ -1,196 +1,389 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 
-// --- КОНСТАНТЫ РАЗМЕРОВ ---
-// Можно вынести или оставить здесь
 const MODULE_WIDTH = 100;
 const MODULE_HEIGHT = 50;
-const PIPE_HEIGHT = 20; // Сделаем трубы пониже для визуального отличия
+const PIPE_HEIGHT = 20;
+const SPLITTER_COLLECTOR_WIDTH = 70;
+const SPLITTER_COLLECTOR_HEIGHT = 70;
 
-const DraggableModule = ({ module, onClick, onUpdatePosition, onConnect, connections }) => {
-  const ref = useRef(null);
+const DraggableModule = ({
+  module,
+  onClick,
+  onUpdatePosition,
+  onConnect,
+  connections,
+  isSelected,
+  calculatedPipeData,
+  viewBoxOffsetX,
+  viewBoxOffsetY,
+  viewBoxScale,
+}) => {
+  const moduleRef = useRef(null);
+  const isSplitter = module.type === 'splitter';
+  const isCollector = module.type === 'collector';
+  const isPipe = module.type === 'pipe';
+  let displayTitle = module.name;
 
-  // --- Логика определения занятости портов ---
-  const isOutputPortBusy = useMemo(() => {
-    // Исходящий порт занят, если есть соединение, где sourceId - это наш модуль
-    return connections.some(conn => conn.sourceId === module.instanceId);
-  }, [connections, module.instanceId]);
-
-  const isInputPortBusy = useMemo(() => {
-     // Входящий порт занят, если есть соединение, где targetId - это наш модуль
-    return connections.some(conn => conn.targetId === module.instanceId);
-  }, [connections, module.instanceId]);
-
-  // --- useDrag для перемещения модуля ---
-  const [{ isDragging: isModuleDragging }, moduleDrag, preview] = useDrag(() => ({
-    type: 'MODULE_INSTANCE',
-    item: () => ({ instanceId: module.instanceId, initialPosition: { ...module.position }, type: module.type }),
-    collect: (monitor) => ({ isModuleDragging: monitor.isDragging() }),
-    end: (item, monitor) => {
-        const dropResult = monitor.getDropResult();
-        const delta = monitor.getDifferenceFromInitialOffset();
-        // Обновляем позицию только если модуль был брошен на MainScreen
-        // и сдвиг действительно был
-        if (item && delta && dropResult && dropResult.name === 'MainScreen') {
-            const newX = item.initialPosition.x + delta.x;
-            const newY = item.initialPosition.y + delta.y;
-            // Вызываем колбэк для обновления позиции в App.js
-            onUpdatePosition(item.instanceId, { x: newX, y: newY });
-        }
-    },
-  }), [module.instanceId, module.position.x, module.position.y, onUpdatePosition]); // Добавляем зависимости
-
-  // --- useDrag для ИСХОДЯЩЕГО порта ---
-  const [{ isConnecting }, portDrag] = useDrag(() => ({
-    type: 'CONNECTION_PORT',
-    item: { sourceId: module.instanceId }, // Передаем ID источника
-    // Порт можно тащить, только если это НЕ труба, НЕ конечный узел и НЕ занят
-    canDrag: module.type !== 'end' && !isOutputPortBusy,
-    collect: (monitor) => ({ isConnecting: monitor.isDragging() }),
-    // end: (item, monitor) => { // Можно добавить логику отмены, если не бросили на порт
-    // }
-  }), [module.instanceId, module.type, isOutputPortBusy]); // Добавляем зависимости
-
-  // --- useDrop для ВХОДЯЩЕГО порта ---
-  const [{ isOverInput, canDropOnInput }, portDrop] = useDrop(() => ({
-    accept: 'CONNECTION_PORT', // Принимаем только порты
-    // На порт можно бросать, только если это НЕ труба, НЕ стартовый узел и НЕ занят
-    canDrop: (item, monitor) => module.type !== 'start' && module.type !== 'engine_input' && !isInputPortBusy && item.sourceId !== module.instanceId, // Нельзя соединить сам с собой
-    drop: (item, monitor) => {
-        // item содержит { sourceId: ... } из useDrag порта
-        if (item.sourceId && onConnect) {
-             // Вызываем колбэк для добавления соединения в App.js
-             onConnect(item.sourceId, module.instanceId);
-        }
-        // Возвращаем результат дропа, если нужно
-        return { droppedOnPort: module.instanceId };
-    },
-    collect: monitor => ({
-        isOverInput: monitor.isOver() && monitor.canDrop(), // Подсвечиваем только если можно бросить
-        canDropOnInput: monitor.canDrop(),
-    }),
-  }), [module.instanceId, module.type, onConnect, isInputPortBusy]); // Добавляем зависимости
-
-  // useEffect для привязки drag/preview
-  useEffect(() => {
-    if (ref.current) {
-        preview(ref.current); // Для превью перемещения
-        moduleDrag(ref.current); // Для возможности перемещения самого модуля
+  if (isPipe && calculatedPipeData && typeof calculatedPipeData === 'object') {
+    let foundPipeInfo = null;
+    Object.values(calculatedPipeData).forEach(systemData => {
+      if (foundPipeInfo) return;
+      if (systemData && systemData.suctionLinePipeDetails) {
+        const pipe = systemData.suctionLinePipeDetails.find(
+          p => String(p.instanceId) === String(module.instanceId)
+        );
+        if (pipe) foundPipeInfo = pipe;
+      }
+      if (foundPipeInfo) return;
+      if (systemData && systemData.commonPathPipeDetails) {
+        const pipe = systemData.commonPathPipeDetails.find(
+          p => String(p.instanceId) === String(module.instanceId)
+        );
+        if (pipe) foundPipeInfo = pipe;
+      }
+      if (foundPipeInfo) return;
+      if (systemData && systemData.branches) {
+        Object.values(systemData.branches).forEach(branch => {
+          if (foundPipeInfo) return;
+          if (branch.pressureLinePipeDetails) {
+            const pipe = branch.pressureLinePipeDetails.find(
+              p => String(p.instanceId) === String(module.instanceId)
+            );
+            if (pipe) foundPipeInfo = pipe;
+          }
+          if (foundPipeInfo) return;
+          if (branch.drainLinePipeDetails) {
+            const pipe = branch.drainLinePipeDetails.find(
+              p => String(p.instanceId) === String(module.instanceId)
+            );
+            if (pipe) foundPipeInfo = pipe;
+          }
+        });
+      }
+      if (foundPipeInfo) return;
+      if (systemData && systemData.commonDrainPipesByCollector) {
+        Object.values(systemData.commonDrainPipesByCollector).forEach(collectorPipes => {
+          if (foundPipeInfo) return;
+          const pipe = collectorPipes.find(
+            p => String(p.instanceId) === String(module.instanceId)
+          );
+          if (pipe) foundPipeInfo = pipe;
+        });
+      }
+    });
+    if (foundPipeInfo) {
+      const titleParts = [
+        `${module.name}(ID:...${String(module.instanceId).slice(-4)})`,
+        `Скорость: ${foundPipeInfo.velocityMs?.toFixed(3) ?? 'N/A'} м/с`,
+        `Re: ${foundPipeInfo.reynolds?.toFixed(0) ?? 'N/A'}`,
+        `λ: ${foundPipeInfo.lambda?.toFixed(4) ?? 'N/A'}`,
+      ];
+      if (foundPipeInfo.frictionLossPa !== undefined) {
+        titleParts.push(`ΔP_тр: ${(foundPipeInfo.frictionLossPa / 1e6).toFixed(4)} МПа`);
+      }
+      if (foundPipeInfo.localLossInPipePa !== undefined) {
+        titleParts.push(`ΔP_мест: ${(foundPipeInfo.localLossInPipePa / 1e6).toFixed(4)} МПа`);
+      }
+      displayTitle = titleParts.join('\n');
     }
-  }, [ref, preview, moduleDrag]); // Зависимости добавлены
+  }
 
-  // Обработчик клика по модулю
-  const handleClick = () => {
-    onClick(module); // Вызываем колбэк из App.js для выделения
+  const getPortBusyState = (portIdentifier, portRole) => {
+    if (portRole === 'output') {
+      return connections.some(conn => String(conn.sourceId) === String(portIdentifier));
+    } else {
+      return connections.some(conn => String(conn.targetId) === String(portIdentifier));
+    }
   };
 
-  // --- Стили модуля ---
-  const isPipe = module.type === 'pipe';
+  const [{ isDragging: isModuleDragging }, moduleDrag, preview] = useDrag(() => ({
+    type: 'MODULE_INSTANCE',
+    item: () => ({
+      instanceId: module.instanceId,
+      initialPosition: { x: module.position?.x || 0, y: module.position?.y || 0 },
+      type: module.type,
+    }),
+    collect: (monitor) => ({
+      isModuleDragging: monitor.isDragging(),
+    }),
+    end: (item, monitor) => {
+      const dropResult = monitor.getDropResult();
+      const deltaScreen = monitor.getDifferenceFromInitialOffset();
+      const currentScale = viewBoxScale || 1;
+      if (item && deltaScreen && dropResult && dropResult.name === 'MainScreen' && currentScale !== 0) {
+        const deltaCanvasX = deltaScreen.x / currentScale;
+        const deltaCanvasY = deltaScreen.y / currentScale;
+        const newCanvasX = item.initialPosition.x + deltaCanvasX;
+        const newCanvasY = item.initialPosition.y + deltaCanvasY;
+        onUpdatePosition(item.instanceId, { x: newCanvasX, y: newCanvasY });
+      }
+    },
+  }), [
+    module.instanceId,
+    module.position?.x,
+    module.position?.y,
+    onUpdatePosition,
+    viewBoxScale,
+  ]);
+
+  const useOutputPortDrag = (portIdentifier, canDragCondition, itemData = {}) => {
+    const [{ isConnecting }, portDrag] = useDrag(() => ({
+      type: 'CONNECTION_PORT',
+      item: { sourceId: portIdentifier, ...itemData },
+      canDrag: canDragCondition && !getPortBusyState(portIdentifier, 'output'),
+      collect: (monitor) => ({
+        isConnecting: monitor.isDragging(),
+      }),
+    }), [
+      module.instanceId,
+      portIdentifier,
+      connections,
+      canDragCondition,
+      itemData,
+      isSplitter,
+      isCollector,
+    ]);
+    return portDrag;
+  };
+
+  const defaultPortDrag = useOutputPortDrag(
+    module.instanceId,
+    !isSplitter && !isCollector && module.type !== 'end' && module.type !== 'engine_input',
+    { outputPortIndex: 0 }
+  );
+  const splitterPortDrag0 = useOutputPortDrag(
+    `${module.instanceId}_out0`,
+    isSplitter,
+    { outputPortIndex: 0, isSplitterOutput: true, splitterInstanceId: module.instanceId }
+  );
+  const splitterPortDrag1 = useOutputPortDrag(
+    `${module.instanceId}_out1`,
+    isSplitter,
+    { outputPortIndex: 1, isSplitterOutput: true, splitterInstanceId: module.instanceId }
+  );
+  const collectorPortDrag = useOutputPortDrag(
+    module.instanceId,
+    isCollector,
+    { outputPortIndex: 0 }
+  );
+
+  const useInputPortDrop = (targetPortId, isEnabled = true) => {
+    const [{ isOver, canDrop }, portDropRefHook] = useDrop(() => ({
+      accept: 'CONNECTION_PORT',
+      canDrop: (item) => {
+        if (!isEnabled) return false;
+        if (module.type === 'start' || module.type === 'engine_input') return false;
+        if (getPortBusyState(targetPortId, 'input')) return false;
+
+        let sourceInstanceIdForSelfCheck = item.sourceId;
+        if (item.isSplitterOutput) {
+          sourceInstanceIdForSelfCheck = item.splitterInstanceId;
+        }
+        if (String(sourceInstanceIdForSelfCheck) === String(module.instanceId)) return false;
+
+        return true;
+      },
+      drop: (item) => {
+        if (isEnabled && item.sourceId && onConnect) {
+          onConnect(item.sourceId, targetPortId);
+        }
+      },
+      collect: monitor => ({
+        isOver: isEnabled && monitor.isOver() && monitor.canDrop(),
+        canDrop: isEnabled && monitor.canDrop(),
+      }),
+    }), [
+      module.instanceId,
+      module.type,
+      connections,
+      targetPortId,
+      onConnect,
+      isEnabled,
+    ]);
+    return [{ isOverInput: isOver, canDropOnInput: canDrop }, portDropRefHook];
+  };
+
+  const [{ isOverInput: isOverDefaultIn, canDropOnInput: canDropDefaultIn }, defaultPortDrop] = useInputPortDrop(
+    module.instanceId,
+    !isCollector
+  );
+  const [{ isOverInput: isOverCollectorIn0, canDropOnInput: canDropCollectorIn0 }, collectorPortDrop0] = useInputPortDrop(
+    `${module.instanceId}_in0`,
+    isCollector
+  );
+  const [{ isOverInput: isOverCollectorIn1, canDropOnInput: canDropCollectorIn1 }, collectorPortDrop1] = useInputPortDrop(
+    `${module.instanceId}_in1`,
+    isCollector
+  );
+
+  useEffect(() => {
+    if (moduleRef.current) {
+      preview(moduleRef.current);
+      moduleDrag(moduleRef.current);
+    }
+  }, [preview, moduleDrag]);
+
+  const handleClick = () => {
+    onClick(module);
+  };
+
+  const isEngine = module.type === 'engine_input';
+
+  const effectiveScale = viewBoxScale || 1;
+  const canvasX = module.position?.x || 0;
+  const canvasY = module.position?.y || 0;
+
   const styles = {
     position: 'absolute',
-    left: module.position.x + 'px',
-    top: module.position.y + 'px',
-    backgroundColor: module.properties?.color || '#eee', // Цвет из свойств, безопасный доступ
-    cursor: isModuleDragging ? 'grabbing' : 'grab', // Меняем курсор при перетаскивании
+    left: `${canvasX}px`,
+    top: `${canvasY}px`,
+    width: `${(isSplitter || isCollector ? SPLITTER_COLLECTOR_WIDTH : MODULE_WIDTH)}px`,
+    height: `${(isPipe ? PIPE_HEIGHT : (isSplitter || isCollector ? SPLITTER_COLLECTOR_HEIGHT : MODULE_HEIGHT))}px`,
+    backgroundColor: module.properties?.color || '#eee',
+    cursor: isModuleDragging ? 'grabbing' : 'grab',
     opacity: isModuleDragging ? 0.5 : 1,
-    padding: '10px',
-    // Рамка: у труб пунктирная, у start/end - золотая, у остальных - черная
-    border: `1px solid ${isPipe ? 'gray' : (module.type === 'engine_input' || module.type === 'tank_output' ? 'gold' : 'black')}`,
-    color: '#333', // Темный текст
-    zIndex: isModuleDragging ? 1000 : 'auto',
+    padding: (isPipe ? '2px 5px' : (isSplitter || isCollector ? '5px' : '10px')),
+    border: `${isSelected ? 3 : 1}px solid ${
+      isSelected
+        ? 'dodgerblue'
+        : (isPipe || isSplitter || isCollector
+          ? 'gray'
+          : (isEngine || module.type === 'tank_output'
+            ? 'gold'
+            : 'black'))
+    }`,
+    color: '#333',
+    zIndex: isModuleDragging ? 1000 : (isSelected ? 500 : 'auto'),
     boxSizing: 'border-box',
-    width: `${MODULE_WIDTH}px`,
-    height: `${isPipe ? PIPE_HEIGHT : MODULE_HEIGHT}px`, // Разная высота
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
-    fontSize: isPipe ? '0.8em' : '1em', // Меньше шрифт для труб
-    userSelect: 'none', // Предотвращаем выделение текста при перетаскивании
+    fontSize: `${(isPipe || isSplitter || isCollector ? 0.8 : 1)}em`,
+    userSelect: 'none',
+    borderRadius: `${(isSplitter || isCollector ? 5 : 0)}px`
   };
-  // Курсор при перетаскивании модуля
-  // if (isModuleDragging) styles.cursor = 'grabbing'; // Уже учтено выше
 
-  // --- Стили портов ---
+  const portSize = 10;
+  const portBorderWidth = 1;
+
   const portBaseStyle = {
     position: 'absolute',
-    width: '12px',
-    height: '12px',
-    backgroundColor: 'gray',
-    border: '1px solid black',
+    width: `${portSize}px`,
+    height: `${portSize}px`,
+    backgroundColor: '#555',
+    border: `${portBorderWidth}px solid black`,
     borderRadius: '50%',
-    zIndex: 1, // Порты над модулем
+    zIndex: 100,
   };
 
-  // Стиль для исходящего порта (справа)
-  const outputPortStyle = {
+  const finalGetInputPortStyle = (portId, isOver, canDrop, topPositionPercent = 50) => ({
     ...portBaseStyle,
-    top: '50%',
-    right: '-6px', // Выносим за пределы модуля
+    left: `-${portSize / 2 + portBorderWidth}px`,
+    top: `${topPositionPercent}%`,
     transform: 'translateY(-50%)',
-    // Курсор меняется в зависимости от возможности перетаскивания
-    cursor: (module.type === 'end' || isOutputPortBusy) ? 'not-allowed' : 'crosshair',
-    backgroundColor: isOutputPortBusy ? 'darkred' : '#555', // Красный, если занят
-  };
+    cursor: canDrop ? 'default' : 'not-allowed',
+    backgroundColor: getPortBusyState(portId, 'input') ? 'darkred' : (isOver && canDrop ? 'lightgreen' : '#555'),
+  });
 
-  // Стиль для входящего порта (слева)
-  const inputPortStyle = {
+  const finalGetOutputPortStyle = (portId, canDragFlag, topPositionPercent = 50) => ({
     ...portBaseStyle,
-    top: '50%',
-    left: '-6px', // Выносим за пределы модуля
+    right: `-${portSize / 2 + portBorderWidth}px`,
+    top: `${topPositionPercent}%`,
     transform: 'translateY(-50%)',
-    // Курсор по умолчанию, если нельзя бросить или это стартовый узел
-    cursor: (module.type === 'start' || module.type === 'engine_input' || isInputPortBusy || !canDropOnInput) ? 'not-allowed' : 'default',
-    backgroundColor: isInputPortBusy ? 'darkred' : '#555', // Красный, если занят
-  };
-
-  // Подсветка при наведении на входящий порт (если можно бросить)
-  if (isOverInput && canDropOnInput) {
-    inputPortStyle.backgroundColor = 'lightgreen';
-  }
+    cursor: canDragFlag && !getPortBusyState(portId, 'output') ? 'crosshair' : 'not-allowed',
+    backgroundColor: getPortBusyState(portId, 'output') ? 'darkred' : '#555',
+  });
 
   return (
     <div
-      ref={ref} // Привязываем ref ко всему элементу
-      className={`draggable-module type-${module.type}`}
+      ref={moduleRef}
+      className={`draggable-module type-${module.type} ${isSelected ? 'selected' : ''}`}
       style={styles}
       onClick={handleClick}
+      title={displayTitle}
     >
-      {!isPipe && module.name}
+      {effectiveScale > 0.4 && !isPipe && !isSplitter && !isCollector && module.name}
+      {effectiveScale > 0.4 && (isSplitter || isCollector) && (
+        <span style={{
+          writingMode: 'vertical-rl',
+          textOrientation: 'mixed',
+          lineHeight: `${(isSplitter || isCollector ? SPLITTER_COLLECTOR_HEIGHT : MODULE_HEIGHT) - 10}px`,
+        }}>
+          {module.name}
+        </span>
+      )}
 
+      {module.type !== 'start' && module.type !== 'engine_input' && (
         <>
-          {/* Входящий порт (не для start/engine) */}
-          {module.type !== 'start' && module.type !== 'engine_input' && (
+          {isCollector ? (
+            <>
+              <div
+                ref={collectorPortDrop0}
+                className="port input-port collector-in-0"
+                style={finalGetInputPortStyle(`${module.instanceId}_in0`, isOverCollectorIn0, canDropCollectorIn0, 25)}
+                title={`Входной порт 1 (${module.name})`}
+              />
+              <div
+                ref={collectorPortDrop1}
+                className="port input-port collector-in-1"
+                style={finalGetInputPortStyle(`${module.instanceId}_in1`, isOverCollectorIn1, canDropCollectorIn1, 75)}
+                title={`Входной порт 2 (${module.name})`}
+              />
+            </>
+          ) : (
             <div
-              ref={portDrop} // Привязываем drop к порту
+              ref={defaultPortDrop}
               className="port input-port"
-              style={inputPortStyle}
-              title={
-                    isInputPortBusy ? "Входной порт (занят)" :
-                    (module.type === 'start' || module.type === 'engine_input') ? "Нельзя подключить к Start/Engine" :
-                    canDropOnInput ? "Входной порт (бросить сюда)" : "Входной порт"
-              }
-            ></div>
-          )}
-
-          {/* Исходящий порт (не для end/tank) */}
-          {module.type !== 'end' && (
-            <div
-              ref={portDrag} // Привязываем drag к порту
-              className="port output-port"
-              style={outputPortStyle}
-              title={
-                    isOutputPortBusy ? "Выходной порт (занят)" :
-                    (module.type === 'end' || module.type === 'tank_output') ? "Нельзя подключить от End/Tank" :
-                    "Выходной порт (тащить для соединения)"
-              }
-            ></div>
+              style={finalGetInputPortStyle(module.instanceId, isOverDefaultIn, canDropDefaultIn, 50)}
+              title={`Входной порт (${module.name})`}
+            />
           )}
         </>
+      )}
+
+      {module.type !== 'engine_input' && module.type !== 'end' && (
+        <>
+          {isSplitter ? (
+            <>
+              <div
+                ref={splitterPortDrag0}
+                className="port output-port splitter-out-0"
+                style={finalGetOutputPortStyle(`${module.instanceId}_out0`, true, 25)}
+                title={`Выходной порт 1 (${module.name})`}
+              />
+              <div
+                ref={splitterPortDrag1}
+                className="port output-port splitter-out-1"
+                style={finalGetOutputPortStyle(`${module.instanceId}_out1`, true, 75)}
+                title={`Выходной порт 2 (${module.name})`}
+              />
+            </>
+          ) : (
+            <div
+              ref={module.type === 'collector' ? collectorPortDrag : defaultPortDrag}
+              className="port output-port"
+              style={finalGetOutputPortStyle(module.instanceId, true, 50)}
+              title={
+                module.type === 'tank_output'
+                  ? "Выход на всасывание"
+                  : `Выходной порт (${module.name})`
+              }
+            />
+          )}
+        </>
+      )}
     </div>
   );
 };
 
-// Экспорт констант может быть полезен в MainScreen
-export { MODULE_WIDTH, MODULE_HEIGHT, PIPE_HEIGHT };
+export {
+  MODULE_WIDTH,
+  MODULE_HEIGHT,
+  PIPE_HEIGHT,
+  SPLITTER_COLLECTOR_WIDTH as SPLITTER_WIDTH,
+  SPLITTER_COLLECTOR_HEIGHT as SPLITTER_HEIGHT,
+};
+
 export default DraggableModule;

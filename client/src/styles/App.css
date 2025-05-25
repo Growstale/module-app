@@ -1,22 +1,81 @@
-/* В App.css */
-
 .app {
   display: flex;
   height: 100vh;
+  overflow: hidden;
 }
 
 .left-panel {
-  width: 250px; /* Или ваша ширина каталога */
+  width: 250px;
   border-right: 1px solid #ccc;
   display: flex;
-  flex-direction: column; /* Чтобы элементы шли друг под другом */
-  background-color: #f8f8f8; /* Цвет фона для левой панели */
+  flex-direction: column;
+  background-color: #f8f8f8;
+  overflow-y: auto;
+}
+
+.controls-section.top-controls {
+  margin-bottom: 20px;
+}
+
+.main-work-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.main-screen {
+  flex-grow: 1;
+  position: relative;
+}
+
+.results-summary-bar {
+  background-color: #f0f0f0;
+  padding: 8px 15px;
+  border-top: 1px solid #ccc;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+  z-index: 10;
+}
+
+.results-summary-bar:hover {
+  background-color: #e0e0e0;
+}
+
+.results-summary-bar.open {
+  background-color: #d0d0d0;
+}
+
+.results-toggle-arrow {
+  font-size: 0.8em;
+  margin-left: 10px;
+}
+
+.results-panel {
+  max-height: 60vh;
+  border-top: 1px solid #ccc;
+  background-color: #f9f9f9;
+  padding: 10px;
+  transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  opacity: 1;
+}
+
+.properties-screen {
+  width: 300px;
+  border-left: 1px solid #ccc;
+  padding: 10px;
+  overflow-y: auto;
 }
 
 .top-controls {
   padding: 15px;
-  border-bottom: 1px solid #ccc; /* Отделить от каталога */
-  background-color: #eaeaea; /* Немного другой фон для блока управления */
+  border-bottom: 1px solid #ccc;
+  background-color: #eaeaea;
 }
 
 .top-controls h3 {
@@ -25,38 +84,30 @@
   text-align: center;
 }
 
-
 .top-controls button {
-  display: block; /* Каждая кнопка на новой строке */
-  width: 100%;     /* Занимает всю доступную ширину */
-  margin-bottom: 8px; /* Отступ снизу */
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
   padding: 8px 10px;
-  /* ... другие стили кнопок ... */
 }
 
 .top-controls .validation-result,
 .top-controls .processing-result {
   margin-top: 10px;
   font-size: 0.9em;
-  /* ... стили для результатов ... */
 }
 
-
-/* Каталог теперь внутри .left-panel */
 .catalog {
-  flex-grow: 1; /* Занимает оставшееся место в .left-panel */
-  overflow-y: auto; /* Если каталог длинный */
+  flex-grow: 1;
+  overflow-y: auto;
   padding: 15px;
 }
 
-/* Остальные стили для .main-screen, .properties-screen остаются как были */
 .main-screen {
-  flex-grow: 1; /* Занимает основное пространство */
-  /* ... */
+  flex-grow: 1;
 }
 
 .properties-screen {
-  width: 300px; /* Или ваша ширина */
+  width: 300px;
   border-left: 1px solid #ccc;
-  /* ... */
 }
