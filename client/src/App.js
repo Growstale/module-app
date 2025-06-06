@@ -14,19 +14,66 @@ function App() {
     const [selectedModule, setSelectedModule] = useState(null);
     const [mainScreenModules, setMainScreenModules] = useState([]);
     const [connections, setConnections] = useState([]);
+    // Строка для отображения краткого результата гидравлического расчета
     const [processingResult, setProcessingResult] = useState('');
+    // Массив сохраненных схем, загруженных с сервера
     const [savedSchemes, setSavedSchemes] = useState([]);
+    // Булевый флаг, указывающий, происходит ли в данный момент какая-либо загрузка данных с сервера
     const [isLoading, setIsLoading] = useState(false);
+    // Булевый флаг, управляющий видимостью модального окна LoadSchemeModal
     const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+    // Объект, хранящий детализированные результаты расчетов, полученные от сервера
     const [detailedResults, setDetailedResults] = useState(null);
+    // Хранит полный ответ от сервера после выполнения расчета
     const [calculationResponse, setCalculationResponse] = useState(null);
+    // Булевый флаг, управляющий видимостью панели с детализированными результатами
     const [isResultsPanelOpen, setIsResultsPanelOpen] = useState(false);
+    // Объект, хранящий сообщения об ошибках и предупреждениях, выявленных при клиентской валидации схемы
+    const [validationMessages, setValidationMessages] = useState({ errors: [], warnings: [] });
+    // Массив ID модулей, которые были помечены сервером как проблемные по результатам расчета
+    const [problematicModules, setProblematicModules] = useState([]);
 
+    // Массив объектов, определяющих доступные для выбора рабочие жидкости и их свойства
+    const fluidOptions = [
+        { key: "HLP32", name: "HLP 32 (стандарт)", density: 868, kinematicViscosityM2s: 33.2e-6, default: true },
+        { key: "MGE46A", name: "МГЕ-46А", density: 875, kinematicViscosityM2s: 46e-6 }, 
+        { key: "VMGZ", name: "ВМГЗ", density: 860, kinematicViscosityM2s: 10e-6 }   
+    ];
+
+    // Строка, хранящая ключ (идентификатор) текущей выбранной рабочей жидкости
+    const [selectedFluidKey, setSelectedFluidKey] = useState(
+        fluidOptions.find(f => f.default)?.key || fluidOptions[0].key
+    );
+
+    const clearAllDynamicStates = () => {
+        setValidationMessages({ errors: [], warnings: [] });
+        setProblematicModules([]);
+        setProcessingResult('');
+        setCalculationResponse(null);
+        setDetailedResults(null);
+    };
+
+    // Обработчик изменения жидкости
+    const handleFluidChange = (event) => {
+        setSelectedFluidKey(event.target.value);
+        clearAllDynamicStates(); 
+    };
+
+    // Вызывается, когда пользователь кликает на свободное место на MainScreen или на модуле, чтобы убрать фокус с текущего выделенного модуля
+    const deselectModule = useCallback(() => {
+    if (selectedModule !== null) { 
+        setSelectedModule(null);
+    }
+    }, [selectedModule]);
+
+    // Переключает состояние isResultsPanelOpen, показывая или скрывая панель детализированных результатов
     const toggleResultsPanel = () => {
         setIsResultsPanelOpen(prev => !prev);
     };
 
+    // Обновляет позицию модуля с заданным instanceId в массиве mainScreenModules
     const updateModulePosition = useCallback((instanceId, newPosition) => {
+        clearAllDynamicStates();
         setMainScreenModules(prevModules =>
             prevModules.map(module =>
                 module.instanceId === instanceId ? { ...module, position: newPosition } : module
@@ -37,6 +84,7 @@ function App() {
         }
     }, [selectedModule]);
 
+    // Возвращает объект со свойствами по умолчанию для нового модуля, добавляемого на MainScreen
     const getDefaultProperties = (item) => {
         let defaultProps = { color: '#9e9e9e' };
         switch (item.id) {
@@ -53,12 +101,15 @@ function App() {
             case 'pipe': defaultProps = { ...defaultProps, diameter: 0.020, length: 1.0, roughness: 0.00005, localResistanceCoeff: 0, color: '#607d8b' }; break;
             case 'tee_splitter': defaultProps = { ...defaultProps, pressureDrop: 0.01, nominalFlowLmin: 200, color: '#757575' }; break;
             case 'collector': defaultProps = { ...defaultProps, pressureDrop: 0.01, nominalFlowLmin: 200, color: '#BDBDBD' }; break;
+            case 'hydromotor_basic': defaultProps = {...defaultProps, workingVolume: 50, mechEff: 0.9, volEff: 0.95, nominalPressureMPa: 16, nominalRpm: 1500, maxRpm: 3000, torqueAtNominalPressure: 100, requiredTorque: 80, sideSurfaceArea: 0.05, color: '#ffc107' }; break;
             default: break;
         }
         return defaultProps;
     };
 
+    // Обработчик события "бросания" модуля на MainScreen
     const handleDrop = useCallback((item, offset) => {
+        clearAllDynamicStates();
         if (item.instanceId) {
             updateModulePosition(item.instanceId, offset);
         }
@@ -69,33 +120,39 @@ function App() {
                 instanceId: Date.now(), properties: defaultProps, position: { x: offset.x, y: offset.y }
             };
             setMainScreenModules((prev) => [...prev, newInstance]);
-            setProcessingResult('');
         }
-    }, [updateModulePosition]);
+    }, [updateModulePosition, getDefaultProperties]);
 
-    const handleModuleClick = (module) => { setSelectedModule(module); };
+    // Устанавливает переданный module как selectedModule
+    const handleModuleClick = (module) => {
+        setSelectedModule(module);
+    };
 
+    // Обновляет свойства модуля с instanceId в mainScreenModules
     const updateModuleProperties = useCallback((instanceId, newProperties) => {
+        clearAllDynamicStates();
         setMainScreenModules(prevModules => prevModules.map(m =>
             m.instanceId === instanceId ? { ...m, properties: newProperties } : m
         ));
         if (selectedModule && selectedModule.instanceId === instanceId) {
             setSelectedModule(prevSelected => ({ ...prevSelected, properties: newProperties }));
         }
-        setProcessingResult('');
     }, [selectedModule]);
 
+    // Удаляет модуль с instanceIdToDelete из mainScreenModules
     const handleDeleteModule = useCallback((instanceIdToDelete) => {
+        clearAllDynamicStates();
         setMainScreenModules(prevModules => prevModules.filter(module => module.instanceId !== instanceIdToDelete));
         setConnections(prevConnections => prevConnections.filter(conn =>
             !(String(conn.sourceId).startsWith(String(instanceIdToDelete))) &&
             !(String(conn.targetId).startsWith(String(instanceIdToDelete)))
         ));
         if (selectedModule && selectedModule.instanceId === instanceIdToDelete) { setSelectedModule(null); }
-        setProcessingResult('');
     }, [selectedModule]);
 
+    // Добавляет новое соединение в массив connections
     const handleAddConnection = useCallback((sourceId, targetPortId) => {
+        clearAllDynamicStates();
         let targetInstanceId = targetPortId;
         if (typeof targetPortId === 'string' && targetPortId.includes('_in')) {
             targetInstanceId = targetPortId.split('_in')[0];
@@ -106,60 +163,114 @@ function App() {
         }
 
         if (sourceInstanceIdForSelfCheck === targetInstanceId) {
-            alert("Cannot connect module to itself or its own output port to its input.");
+            alert("Нельзя соединить модуль с самим собой или его выходной порт с его же входом.");
             return;
         }
 
         const targetModuleForTypeCheck = mainScreenModules.find(m => String(m.instanceId) === String(targetInstanceId));
         if (targetModuleForTypeCheck?.type === 'start' || targetModuleForTypeCheck?.type === 'engine_input') {
-            console.warn("[handleAddConnection] FAILED: Cannot connect TO a Start/Engine node.");
-            alert("Cannot connect TO a Start/Engine node."); return;
-        }
-
-        const sourceModuleForTypeCheck = mainScreenModules.find(m => String(m.instanceId) === String(sourceInstanceIdForSelfCheck));
-        if (sourceModuleForTypeCheck?.type === 'end' || (sourceModuleForTypeCheck?.type === 'tank_output' && !(typeof sourceId === 'string' && sourceId.includes('_out')))) {
+            alert("Нельзя подключаться К модулю Двигателя."); return;
         }
 
         const connectionToSpecificTargetPortExists = connections.some(conn => conn.sourceId === sourceId && conn.targetId === targetPortId);
-        if (connectionToSpecificTargetPortExists) {
-            return;
-        }
-
+        if (connectionToSpecificTargetPortExists) return;
+        
         const isSourcePortActuallyBusy = connections.some(conn => conn.sourceId === sourceId);
         if (isSourcePortActuallyBusy) {
-            const sourceName = sourceModuleForTypeCheck?.name || sourceId.split('_out')[0] || 'Source';
-            console.warn(`[handleAddConnection] FAILED: Output port of "${sourceName}" is already connected.`);
-            alert(`Output port of "${sourceName}" is already connected.`); return;
+            const sourceModuleForTypeCheck = mainScreenModules.find(m => String(m.instanceId) === String(sourceInstanceIdForSelfCheck));
+            const sourceName = sourceModuleForTypeCheck?.name || sourceId.split('_out')[0] || 'Источник';
+            alert(`Выходной порт "${sourceName}" уже занят.`); return;
         }
 
         const isTargetPortActuallyBusy = connections.some(conn => conn.targetId === targetPortId);
         if (isTargetPortActuallyBusy) {
-            const targetName = targetModuleForTypeCheck?.name || targetPortId.split('_in')[0] || 'Target';
-            console.warn(`[handleAddConnection] FAILED: Input port of "${targetName}" is already connected.`);
-            alert(`Input port of "${targetName}" is already connected.`); return;
+            const targetName = targetModuleForTypeCheck?.name || targetPortId.split('_in')[0] || 'Цель';
+            alert(`Входной порт "${targetName}" уже занят.`); return;
         }
 
         const newConnection = { id: `conn-${Date.now()}`, sourceId: sourceId, targetId: targetPortId };
-        setConnections(prevConnections => {
-            const updatedConnections = [...prevConnections, newConnection];
-            return updatedConnections;
-        });
-        setProcessingResult('');
+        setConnections(prevConnections => [...prevConnections, newConnection]);
     }, [connections, mainScreenModules]);
 
+    // Удаляет соединение с connectionIdToRemove из connections
     const handleRemoveConnection = useCallback((connectionIdToRemove) => {
+        clearAllDynamicStates();
         setConnections(prevConnections => prevConnections.filter(conn => conn.id !== connectionIdToRemove));
-        setProcessingResult('');
     }, []);
 
+    // Выполняет базовую клиентскую валидацию схемы перед отправкой на сервер
+    const validateSchemeForClient = () => {
+        const currentErrors = [];
+        const currentWarnings = [];
+
+        const engine = mainScreenModules.find(m => m.type === 'engine_input');
+        const tank = mainScreenModules.find(m => m.type === 'tank_output');
+        const pumps = mainScreenModules.filter(m => m.type === 'pump');
+
+        if (!engine) currentErrors.push("Отсутствует модуль двигателя (engine_input) на схеме.");
+        if (!tank) currentErrors.push("Отсутствует модуль гидробака (tank_output) на схеме.");
+        if (pumps.length === 0) currentErrors.push("Отсутствует хотя бы один модуль насоса (pump) на схеме.");
+
+        pumps.forEach(pump => {
+            const pumpInstanceIdStr = String(pump.instanceId);
+            const incomingConnectionsToPump = connections.filter(conn => String(conn.targetId).split('_in')[0] === pumpInstanceIdStr);
+            const outgoingConnectionsFromPump = connections.filter(conn => String(conn.sourceId).split('_out')[0] === pumpInstanceIdStr);
+            if (incomingConnectionsToPump.length === 0) currentWarnings.push(`Насос "${pump.name}" (ID: ${pump.instanceId}) не имеет всасывающей линии.`);
+            if (outgoingConnectionsFromPump.length === 0) currentWarnings.push(`Насос "${pump.name}" (ID: ${pump.instanceId}) не имеет напорной линии.`);
+        });
+        
+        if (mainScreenModules.length > 2 && connections.length === 0) {
+            currentWarnings.push("На схеме есть несколько модулей, но отсутствуют соединения между ними.");
+        }
+        
+        mainScreenModules.forEach(m => {
+            if (!m.properties || Object.keys(m.properties).length === 0) {
+                 currentWarnings.push(`Модуль "${m.name}" (ID: ${m.instanceId}) не имеет свойств. Проверьте панель свойств.`);
+            }
+        });
+        
+        setValidationMessages({ errors: currentErrors, warnings: currentWarnings }); 
+        return { errors: currentErrors, warnings: currentWarnings }; 
+    };
+
+    // Функция для запуска гидравлического расчета
     const handleProcessChain = async () => {
+        clearAllDynamicStates(); 
+
+        const validationResult = validateSchemeForClient();
+
+        if (validationResult.errors.length > 0) {
+            setIsLoading(false); 
+            return; 
+        }
+        
+        if (validationResult.warnings.length > 0) {
+             if (!window.confirm("Обнаружены следующие предупреждения по схеме:\n- " + validationResult.warnings.join("\n- ") + "\n\nПродолжить расчет?")) {
+                setIsLoading(false);
+                return; 
+            }
+        }
+
+        setValidationMessages({ errors: [], warnings: [] }); 
+        const currentSelectedFluid = fluidOptions.find(f => f.key === selectedFluidKey);
+        if (!currentSelectedFluid) {
+            alert("Ошибка: Выбранная жидкость не найдена. Расчет невозможен.");
+            setIsLoading(false);
+            return;
+        }
+
+        // Формирует payload для отправки на сервер: modules, connections и свойства выбранной жидкости
         const payload = {
             modules: mainScreenModules,
             connections: connections,
+            fluidProperties: { 
+                density: currentSelectedFluid.density,
+                kinematicViscosityM2s: currentSelectedFluid.kinematicViscosityM2s
+            }
         };
         setIsLoading(true);
         setProcessingResult('Calculating...');
-        setDetailedResults(null);
+        
         try {
             const response = await fetch(`${API_BASE_URL}/calculate-hydraulics`, {
                 method: 'POST',
@@ -169,17 +280,17 @@ function App() {
             const data = await response.json();
 
             if (!response.ok) {
-                const errorText = data.error || `HTTP error! status: ${response.status}`;
+                const errorText = data.error || `HTTP error! status: ${response.status} - ${response.statusText}`;
                 console.error("Ошибка ответа сервера:", errorText, data);
-                setProcessingResult(`Server Error: ${errorText}`);
+                setProcessingResult(`Ошибка сервера: ${errorText}`);
                 setDetailedResults(null);
-                setIsLoading(false);
-                alert(`Server Error: ${errorText}`);
+                setProblematicModules([]);
+                alert(`Ошибка сервера: ${errorText}`);
                 return;
             }
 
-            let tempString = 'N/A';
-            let conclusionString = 'No conclusion.';
+            let tempString = 'Н/Д';
+            let conclusionString = 'Нет заключения';
 
             if (data.thermalBalance && typeof data.thermalBalance === 'object') {
                 if (data.thermalBalance.calculatedSteadyStateTempC !== null &&
@@ -188,33 +299,61 @@ function App() {
                     !Number.isNaN(data.thermalBalance.calculatedSteadyStateTempC)) {
                     tempString = data.thermalBalance.calculatedSteadyStateTempC.toFixed(1) + '°C';
                 } else if (data.thermalBalance.calculatedSteadyStateTempC === null) {
-                    tempString = 'N/A (бесконечность или не рассчитывалось)';
+                    tempString = 'Н/Д (бесконечность или не рассчитывалось)';
                 } else {
-                    console.warn("calculatedSteadyStateTempC имеет неверный формат или отсутствует:", data.thermalBalance.calculatedSteadyStateTempC);
                     tempString = 'Ошибка данных температуры';
                 }
                 conclusionString = data.thermalBalance.conclusion || 'Нет заключения.';
-            } else {
-                console.warn("Объект data.thermalBalance отсутствует или имеет неверный формат в ответе сервера!");
-                conclusionString = 'Данные теплового баланса не получены.';
             }
-
-            const resultString = `Result: Temp = ${tempString}. ${conclusionString}`;
+            
+            const resultString = `Результат: Темп. = ${tempString}. ${conclusionString}`;
             setProcessingResult(resultString);
             setCalculationResponse(data);
             setDetailedResults(data.details || {});
+            
+            console.log("Клиент: полученные data.details от сервера:", JSON.stringify(data.details, null, 2));
+
+            let allProblematicIds = [];
+            if (data.details) {
+                Object.values(data.details).forEach(systemData => {
+                    if (systemData.problematicModuleIds && Array.isArray(systemData.problematicModuleIds)) { 
+                        allProblematicIds = [...allProblematicIds, ...systemData.problematicModuleIds];
+                    }
+                    if (systemData.branches) {
+                        Object.values(systemData.branches).forEach(branch => {
+                            if ((branch.isDeadEnd || branch.isBrokenPath) && branch.actualEntryNodeForPathCalc?.instanceId) {
+                                const problematicId = String(branch.actualEntryNodeForPathCalc.instanceId);
+                                if (!allProblematicIds.includes(problematicId)) {
+                                    allProblematicIds.push(problematicId);
+                                }
+                            } else if (branch.isDeadEnd && branch.entryNodeInstanceId && 
+                                       mainScreenModules.find(m => String(m.instanceId) === String(branch.entryNodeInstanceId))?.type === 'splitter' &&
+                                       branch.deadEndMessage && branch.deadEndMessage.includes("не имеет выходных соединений")) {
+                                const problematicId = String(branch.entryNodeInstanceId);
+                                if (!allProblematicIds.includes(problematicId)) {
+                                    allProblematicIds.push(problematicId);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+            setProblematicModules([...new Set(allProblematicIds.map(id => String(id)))]); 
+
         } catch (error) {
-            console.error("Error processing hydraulics:", error);
-            const errorMsg = `Error: ${error.message}`;
+            console.error("Ошибка обработки гидравлики:", error);
+            const errorMsg = `Ошибка: ${error.message}`;
             setProcessingResult(errorMsg);
             setCalculationResponse(null);
             setDetailedResults(null);
+            setProblematicModules([]);
             alert(errorMsg);
         } finally {
             setIsLoading(false);
         }
     };
 
+    // Функция для загрузки списка сохраненных схем с сервера
     const fetchSavedSchemes = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -228,26 +367,91 @@ function App() {
 
     useEffect(() => { fetchSavedSchemes(); }, [fetchSavedSchemes]);
 
+    // Функция для сохранения текущей схемы
     const handleSaveScheme = async () => {
-        const schemeName = prompt("Enter a name for your scheme:");
+        // Проверяет, существует ли схема с таким именем. Если да, и пользователь согласен перезаписать, используется ID существующей схемы 
+        // для PUT-запроса. Иначе – POST-запрос для создания новой
+        clearAllDynamicStates();
+        const currentSchemeName = mainScreenModules.find(m => m.isCurrentlyEditing)?.name || ''; 
+        const schemeName = prompt("Введите имя для вашей схемы:", currentSchemeName);
         if (!schemeName) { return; }
+        
         setIsLoading(true);
+        
+        const existingSchemeByName = savedSchemes.find(s => s.name === schemeName);
+        let schemeToSaveId = null;
+
+        if (existingSchemeByName) {
+            if (window.confirm(`Схема с именем "${schemeName}" уже существует. Хотите перезаписать её?`)) {
+                schemeToSaveId = existingSchemeByName._id;
+            } else {
+                setIsLoading(false);
+                return; 
+            }
+        }
+
         const payload = { name: schemeName, data: { modules: mainScreenModules, connections: connections } };
+        
         try {
-            const response = await fetch(`${API_BASE_URL}/schemes`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `HTTP error! status: ${response.status}`); }
-            const savedScheme = await response.json();
-            alert(`Scheme "${savedScheme.name}" saved successfully!`);
-            fetchSavedSchemes();
-        } catch (error) { console.error("Error saving scheme:", error); alert(`Error: ${error.message}`); }
+            let response;
+            let savedScheme;
+
+            if (schemeToSaveId) { 
+                response = await fetch(`${API_BASE_URL}/schemes/${schemeToSaveId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            } else { 
+                response = await fetch(`${API_BASE_URL}/schemes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
+
+            if (!response.ok) { 
+                const errorData = await response.json(); 
+                throw new Error(errorData.error || `HTTP error! status: ${response.status} - ${response.statusText}`); 
+            }
+            savedScheme = await response.json();
+            alert(`Схема "${savedScheme.name}" успешно ${schemeToSaveId ? 'обновлена' : 'сохранена'}!`);
+            fetchSavedSchemes(); 
+        } catch (error) { 
+            console.error("Ошибка сохранения/обновления схемы:", error); 
+            alert(`Ошибка: ${error.message}`); 
+        }
         finally { setIsLoading(false); }
     };
 
+    // Функция для удаления сохраненной схемы
+    const handleDeleteScheme = async (schemeId) => {
+        if (!schemeId) return;
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/schemes/${schemeId}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                let errorText = await response.text();
+                let errorData;
+                try { errorData = JSON.parse(errorText); } 
+                catch (e) { errorData = { error: `HTTP error! status: ${response.status}`, details: errorText };}
+                throw new Error(errorData.error || `HTTP error! status: ${response.status} - ${response.statusText}`);
+            }
+            const result = await response.json(); 
+            alert(result.message || `Схема успешно удалена!`);
+            fetchSavedSchemes(); 
+        } catch (error) { 
+            console.error("Ошибка удаления схемы (catch):", error); 
+            alert(`Ошибка: ${error.message}`); 
+        }
+        finally { setIsLoading(false); }
+    };
+
+    // Функция для загрузки сохраненной схемы
     const handleLoadScheme = async (schemeId) => {
+        clearAllDynamicStates();
         if (!schemeId) return;
         setIsLoading(true); setIsLoadModalOpen(false);
         try {
@@ -260,8 +464,7 @@ function App() {
             setMainScreenModules(scheme.data.modules || []);
             setConnections(scheme.data.connections || []);
             setSelectedModule(null);
-            setProcessingResult('');
-            alert(`Scheme "${scheme.name}" loaded successfully!`);
+            alert(`Схема "${scheme.name}" успешно загружена!`);
         } catch (error) { console.error("Error loading scheme:", error); alert(`Error: ${error.message}`); }
         finally { setIsLoading(false); }
     };
@@ -274,11 +477,53 @@ function App() {
             <div className="app">
                 <div className="left-panel">
                     <div className="controls-section top-controls">
-                        <button onClick={handleSaveScheme} disabled={isLoading}>{isLoading ? 'Saving...' : 'Save Scheme'}</button>
-                        <button onClick={openLoadModal} disabled={isLoading}>{isLoading ? 'Loading...' : 'Load Scheme'}</button>
-                        <button onClick={handleProcessChain} disabled={isLoading || mainScreenModules.length === 0}>Calculate Hydraulics</button>
-                        {isLoading && <span className="loading-indicator"> Loading...</span>}
+                        <button onClick={handleSaveScheme} disabled={isLoading}>{isLoading ? 'Сохранение...' : 'Сохранить схему'}</button>
+                        <button onClick={openLoadModal} disabled={isLoading}>{isLoading ? 'Загрузка...' : 'Загрузить схему'}</button>
+                        <button 
+                            onClick={handleProcessChain} 
+                            disabled={isLoading || mainScreenModules.length === 0}
+                            style={mainScreenModules.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                        >
+                            Рассчитать гидравлику
+                        </button>
+                        {isLoading && <span className="loading-indicator"> Загрузка...</span>}
                     </div>
+                    <div className="fluid-selector-section controls-section">
+                        <label htmlFor="fluid-select">Рабочая жидкость:</label>
+                        <select 
+                            id="fluid-select" 
+                            value={selectedFluidKey} 
+                            onChange={handleFluidChange}
+                            disabled={isLoading}
+                        >
+                            {fluidOptions.map(option => (
+                                <option key={option.key} value={option.key}>
+                                    {option.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {(validationMessages.errors.length > 0 || validationMessages.warnings.length > 0) && (
+                        <div className="validation-messages-container">
+                            {validationMessages.errors.length > 0 && (
+                                <div className="validation-errors">
+                                    <strong>Ошибки схемы:</strong>
+                                    <ul>
+                                        {validationMessages.errors.map((err, i) => <li key={`err-${i}`}>{err}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {validationMessages.warnings.length > 0 && validationMessages.errors.length === 0 && ( 
+                                <div className="validation-warnings">
+                                    <strong>Предупреждения:</strong>
+                                    <ul>
+                                        {validationMessages.warnings.map((warn, i) => <li key={`warn-${i}`}>{warn}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <Catalog />
                 </div>
 
@@ -293,6 +538,8 @@ function App() {
                         onRemoveConnection={handleRemoveConnection}
                         selectedModule={selectedModule}
                         detailedResults={detailedResults}
+                        problematicModules={problematicModules} 
+                        onDeselectModule={deselectModule}
                     />
 
                     {(processingResult || calculationResponse) && (
@@ -324,6 +571,7 @@ function App() {
                     onClose={closeLoadModal}
                     schemes={savedSchemes}
                     onLoad={handleLoadScheme}
+                    onDelete={handleDeleteScheme}
                     isLoading={isLoading}
                 />
             </div>

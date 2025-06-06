@@ -18,12 +18,16 @@ const DraggableModule = ({
   viewBoxOffsetX,
   viewBoxOffsetY,
   viewBoxScale,
+  problematicModules, 
 }) => {
   const moduleRef = useRef(null);
   const isSplitter = module.type === 'splitter';
   const isCollector = module.type === 'collector';
   const isPipe = module.type === 'pipe';
+  // Начальное значение для всплывающей подсказки
   let displayTitle = module.name;
+  // Проверка, является ли текущий модуль проблемным
+  const isProblematic = problematicModules && problematicModules.includes(String(module.instanceId)); // Убедимся, что сравниваем строки
 
   if (isPipe && calculatedPipeData && typeof calculatedPipeData === 'object') {
     let foundPipeInfo = null;
@@ -224,7 +228,8 @@ const DraggableModule = ({
     }
   }, [preview, moduleDrag]);
 
-  const handleClick = () => {
+  const handleClick = (event) => {
+        event.stopPropagation(); // Останавливаем всплытие
     onClick(module);
   };
 
@@ -244,15 +249,20 @@ const DraggableModule = ({
     cursor: isModuleDragging ? 'grabbing' : 'grab',
     opacity: isModuleDragging ? 0.5 : 1,
     padding: (isPipe ? '2px 5px' : (isSplitter || isCollector ? '5px' : '10px')),
-    border: `${isSelected ? 3 : 1}px solid ${
+    border: `${isSelected ? 3 : (isProblematic ? 3 : 1)}px solid ${
       isSelected
         ? 'dodgerblue'
-        : (isPipe || isSplitter || isCollector
-          ? 'gray'
-          : (isEngine || module.type === 'tank_output'
-            ? 'gold'
-            : 'black'))
+        : (isProblematic 
+            ? 'red' // Красная рамка для проблемных
+            : (isPipe || isSplitter || isCollector
+              ? 'gray'
+              : (module.type === 'engine_input' || module.type === 'tank_output'
+                ? 'gold'
+                : 'black')))
     }`,
+    boxShadow: isProblematic 
+    ? '0 0 8px 2px rgba(255, 0, 0, 0.7)' // Более заметная тень для проблемных
+    : (isSelected ? '0 0 10px rgba(30, 144, 255, 0.7)' : '0 2px 4px rgba(0,0,0,0.1)'),
     color: '#333',
     zIndex: isModuleDragging ? 1000 : (isSelected ? 500 : 'auto'),
     boxSizing: 'border-box',
@@ -299,10 +309,10 @@ const DraggableModule = ({
   return (
     <div
       ref={moduleRef}
-      className={`draggable-module type-${module.type} ${isSelected ? 'selected' : ''}`}
+      className={`draggable-module type-${module.type} ${isSelected ? 'selected' : ''} ${isProblematic ? 'problematic' : ''}`} // Можно добавить класс для доп. стилизации
       style={styles}
       onClick={handleClick}
-      title={displayTitle}
+      title={displayTitle + (isProblematic ? '\n(Проблема в этом модуле/связи)' : '')} // Доп. инфо в title
     >
       {effectiveScale > 0.4 && !isPipe && !isSplitter && !isCollector && module.name}
       {effectiveScale > 0.4 && (isSplitter || isCollector) && (

@@ -25,10 +25,10 @@ const ResultsDisplay = ({ resultsData, allModules }) => {
     const getSpeedStyle = (speedMs, lineTypeForStyle) => {
         let style = {};
         const lowerLineType = lineTypeForStyle.toLowerCase();
-        if (lowerLineType.includes('напорная')) {
+        if (lowerLineType.includes('напорная') || lowerLineType.includes('общего напорного участка')) {
             if (speedMs < 3.0) style.color = 'blue';
             else if (speedMs > 5.0) style.color = 'red';
-        } else if (lowerLineType.includes('сливная')) {
+        } else if (lowerLineType.includes('сливная') || lowerLineType.includes('всасывающ')) { // Для всасывающей тоже применим пороги сливной
             if (speedMs < 2.0) style.color = 'blue';
             else if (speedMs > 3.0) style.color = 'red';
         }
@@ -37,7 +37,8 @@ const ResultsDisplay = ({ resultsData, allModules }) => {
 
     const renderPipeDetails = (pipes, lineDescription, lineTypeForStyle) => {
         if (!pipes || pipes.length === 0) {
-            return <p>Нет данных по индивидуальным трубам для {lineDescription} (возможно, все трубы общие или отсутствуют).</p>;
+            // Убрал сообщение "Нет данных...", чтобы не загромождать вывод, если секция просто пуста
+            return null; 
         }
         return (
             <div className="pipe-details-section">
@@ -105,12 +106,48 @@ const ResultsDisplay = ({ resultsData, allModules }) => {
         );
     };
 
+    
     return (
         <div className="results-display-container">
             <h3>Детализация Расчетов Системы:</h3>
+            {/* Блок для отображения предупреждений */}
+            {resultsData.details && Object.entries(resultsData.details).map(([systemKey, systemData]) => (
+                <React.Fragment key={`warnings-${systemKey}`}>
+                    {systemData.schemaWarnings && systemData.schemaWarnings.length > 0 && (
+                        <div className="system-warnings system-card">
+                            <h4>Предупреждения для системы: {systemKey.replace(/_/g, ' ')}</h4>
+                            <ul>
+                                {systemData.schemaWarnings.map((warning, index) => (
+                                    <li key={`sys-warn-${index}`} style={{ color: 'orange', fontWeight: 'bold' }}>{warning}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    {/* Предупреждения для отдельных веток */}
+                    {systemData.branches && Object.values(systemData.branches).some(branch => branch.isDeadEnd || branch.isBrokenPath) && (
+                         <div className="branch-warnings system-card">
+                            <h5>Предупреждения по веткам системы: {systemKey.replace(/_/g, ' ')}</h5>
+                            <ul>
+                                {Object.values(systemData.branches).map(branch => {
+                                    if (branch.isDeadEnd || branch.isBrokenPath) {
+                                        return (
+                                            <li key={`branch-warn-${branch.branchName}`} style={{ color: 'darkorange' }}>
+                                                Ветка "{branch.branchName.replace(/_/g, ' ')}": {branch.deadEndMessage || branch.brokenPathMessage}
+                                            </li>
+                                        );
+                                    }
+                                    return null;
+                                })}
+                            </ul>
+                        </div>
+                    )}
+                </React.Fragment>
+            ))}
+            {/* Конец блока предупреждений */}
+
             {resultsData.details && Object.entries(resultsData.details).map(([systemKey, systemData]) => {
-                const commonDrainPipesDataByCollector = systemData.commonDrainPipesByCollector || {};
-                const allCommonDrainPipeInstanceIds = Object.values(commonDrainPipesDataByCollector)
+                const commonPathPipeInstanceIds = (systemData.commonPathPipeDetails || []).map(p => String(p.instanceId)); // <--- НОВОЕ
+                const allCommonDrainPipeInstanceIdsFromCollectors = Object.values(systemData.commonDrainPipesByCollector || {})
                     .flat()
                     .map(p => String(p.instanceId));
 
@@ -135,11 +172,29 @@ const ResultsDisplay = ({ resultsData, allModules }) => {
                             </ul>
                         </div>
 
+                        {systemData.suctionLinePipeDetails && systemData.suctionLinePipeDetails.length > 0 && (
+                            <div className="suction-line-section branch-card">
+                                <h6>Всасывающая линия:</h6>
+                                {renderPipeDetails(systemData.suctionLinePipeDetails, "всасывающей линии", "всасывающая")}
+                            </div>
+                        )}
+
+                        {systemData.commonPathPipeDetails && systemData.commonPathPipeDetails.length > 0 && (
+                            <div className="common-pressure-section branch-card">
+                                <h6>Общий напорный участок (до разветвления):</h6>
+                                {renderPipeDetails(systemData.commonPathPipeDetails, "общего напорного участка", "напорная")}
+                            </div>
+                        )}
+                        
                         <h5>Ветки данной системы:</h5>
                         {systemData.branches && Object.entries(systemData.branches).map(([branchKey, branchData]) => {
-                            const individualDrainPipesForBranch = branchData.drainLinePipeDetails
-                                ? branchData.drainLinePipeDetails.filter(pipe => !allCommonDrainPipeInstanceIds.includes(String(pipe.instanceId)))
-                                : [];
+                            
+                            const pressurePipesForThisBranch = (branchData.pressureLinePipeDetails || []).filter( // <--- ИЗМЕНЕНИЕ
+                                pipe => !commonPathPipeInstanceIds.includes(String(pipe.instanceId)) // <--- ИЗМЕНЕНИЕ
+                            );
+                            const drainPipesForThisBranchOnly = (branchData.drainLinePipeDetails || []).filter(
+                                pipe => !allCommonDrainPipeInstanceIdsFromCollectors.includes(String(pipe.instanceId))
+                            );
 
                             return (
                                 <div key={branchKey} className="branch-card">
@@ -165,19 +220,34 @@ const ResultsDisplay = ({ resultsData, allModules }) => {
                                             </ul>
                                         </div>
                                     )}
-                                    {branchData.pressureLinePipeDetails && renderPipeDetails(branchData.pressureLinePipeDetails, "напорной линии ветки", "напорная")}
-                                    {renderPipeDetails(individualDrainPipesForBranch, "сливной линии ветки (до слияния)", "сливная")}
+                                    
+                                    {/* НОВЫЙ БЛОК для мотора (или убедись, что он есть и работает) */}
+                                    {branchData.motorCalculatedParams && (
+                                        <div className="motor-details"> {/* Или actuator-details */}
+                                            <p><strong>Расчетные параметры гидромотора:</strong></p>
+                                            <ul>
+                                                <li>Перепад давления: {formatValue(branchData.motorCalculatedParams.pressureDropMPa, 'МПа')}</li>
+                                                <li>Частота вращения: {formatValue(branchData.motorCalculatedParams.rpm, 'об/мин', 1)}</li>
+                                                <li>Полезная мощность на валу: {formatValue(branchData.motorCalculatedParams.usefulPowerKw, 'кВт')}</li>
+                                                <li>Фактический поток через мотор: {formatValue((branchData.motorCalculatedParams.actualFlowToMotorM3s || 0) * 60000, 'л/мин')}</li>
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {pressurePipesForThisBranch.length > 0 && renderPipeDetails(pressurePipesForThisBranch, "напорной линии ветки", "напорная")} {/* Используем отфильтрованный массив */}
+                                    {drainPipesForThisBranchOnly.length > 0 && renderPipeDetails(drainPipesForThisBranchOnly, "сливной линии ветки (до слияния/коллектора)", "сливная")}
                                 </div>
                             );
                         })}
+                        
                         {Object.keys(systemData.branches || {}).length === 0 && <p>Нет активных веток для отображения в этой системе.</p>}
 
-                        {Object.entries(commonDrainPipesDataByCollector).map(([collectorId, pipes]) => {
+                        {Object.entries(systemData.commonDrainPipesByCollector || {}).map(([collectorId, pipes]) => {
                             const collectorModule = allModules?.find(m => String(m.instanceId) === collectorId);
                             const collectorName = collectorModule ? collectorModule.name : `Коллектор ID ${String(collectorId).slice(-4)}`;
                             if (pipes && pipes.length > 0) {
                                 return (
-                                    <div key={`common-drain-${collectorId}`} className="common-drain-section branch-card">
+                                    <div key={`common-drain-${collectorId}`} className="common-drain-section branch-card"> {/* Можно переименовать класс для специфичности */}
                                         <h6>Общий слив после "{collectorName}":</h6>
                                         {renderPipeDetails(pipes, `общей сливной линии от "${collectorName}"`, "сливная")}
                                     </div>

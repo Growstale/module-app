@@ -16,7 +16,8 @@ const Catalog = () => {
         { id: 'filter_frc12', name: 'Фильтр сливной (FRC12)', type: 'filter', system: 'common' },
         { id: 'pipe', name: 'Трубопровод', type: 'pipe', system: 'common' },
         { id: 'tee_splitter', name: 'Тройник', type: 'splitter', system: 'common' },
-        { id: 'collector', name: 'Смеситель (2->1)', type: 'collector', system: 'common' }
+        { id: 'collector', name: 'Смеситель (2->1)', type: 'collector', system: 'common' },
+        { id: 'hydromotor_basic', name: 'Гидромотор (Базовый)', type: 'motor', system: 'common' }
     ];
 
     return (

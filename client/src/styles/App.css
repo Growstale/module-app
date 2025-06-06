@@ -13,10 +13,6 @@
   overflow-y: auto;
 }
 
-.controls-section.top-controls {
-  margin-bottom: 20px;
-}
-
 .main-work-area {
   flex-grow: 1;
   display: flex;
@@ -84,12 +80,20 @@
   text-align: center;
 }
 
-.top-controls button {
+.controls-section.top-controls button {
   display: block;
   width: 100%;
-  margin-bottom: 8px;
-  padding: 8px 10px;
+  margin-bottom: 10px; /* Увеличим отступ */
+  padding: 10px 15px; /* Увеличим padding */
+  font-size: 0.95em; /* Немного увеличим шрифт */
+  border: none;
+  border-radius: 5px; /* Скругление углов */
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  color: white;
+  font-weight: 500;
 }
+
 
 .top-controls .validation-result,
 .top-controls .processing-result {
@@ -110,4 +114,141 @@
 .properties-screen {
   width: 300px;
   border-left: 1px solid #ccc;
+}
+
+.validation-messages-container {
+  padding: 10px 15px;
+  border-bottom: 1px solid #ccc;
+}
+
+.validation-errors {
+  background-color: #f8d7da; /* Светло-красный */
+  color: #721c24; /* Темно-красный */
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+.validation-warnings {
+  background-color: #fff3cd; /* Светло-желтый */
+  color: #856404; /* Темно-желтый */
+  padding: 10px;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+}
+
+.validation-errors strong, .validation-warnings strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.validation-errors ul, .validation-warnings ul {
+  list-style-type: disc;
+  margin-left: 20px;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+
+.controls-section.top-controls button:nth-child(3) { /* Предполагая, что Calculate третья */
+  background-color: #28a745; /* Зеленый */
+}
+.controls-section.top-controls button:nth-child(3):hover {
+  background-color: #218838;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.controls-section.top-controls button:nth-child(3):disabled {
+  background-color: #6c757d;
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+
+/* Кнопки Save/Load (второстепенные) */
+.controls-section.top-controls button:nth-child(1),
+.controls-section.top-controls button:nth-child(2) {
+  background-color: #007bff; /* Синий */
+}
+.controls-section.top-controls button:nth-child(1):hover,
+.controls-section.top-controls button:nth-child(2):hover {
+  background-color: #0056b3;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.controls-section.top-controls button:nth-child(1):disabled,
+.controls-section.top-controls button:nth-child(2):disabled {
+  background-color: #6c757d;
+   opacity: 0.65;
+   cursor: not-allowed;
+}
+
+/* Кнопки в модальном окне - можно стилизовать отдельно, если нужно */
+.modal-content button {
+  /* ... ваши текущие стили или новые ... */
+  padding: 10px 15px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.modal-content button.delete-button-modal { /* Для кнопки удаления в модальном окне */
+  background-color: #dc3545; /* Красный */
+  color: white;
+}
+.modal-content button.delete-button-modal:hover {
+  background-color: #c82333;
+}
+
+.scheme-list li {
+    /* ... существующие стили ... */
+    display: flex; /* Уже есть */
+    justify-content: space-between; /* Уже есть */
+    align-items: center; /* Уже есть */
+}
+
+.scheme-list-actions button {
+    margin-left: 8px;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    border-radius: 3px;
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #ced4da;
+}
+.scheme-list-actions button:hover {
+    background-color: #dae0e5;
+}
+.scheme-list-actions button.delete-action:hover {
+    background-color: #c82333;
+    color: white;
+    border-color: #bd2130;
+}
+.fluid-selector-section {
+  padding: 10px 15px; /* Отступы как у других контролов */
+  border-bottom: 1px solid #ccc;
+  background-color: #f0f0f0; /* Немного другой фон для выделения */
+  display: flex;
+  flex-direction: column; /* Чтобы label был над select */
+  gap: 5px; /* Пространство между label и select */
+}
+
+.fluid-selector-section label {
+  font-weight: bold;
+  font-size: 0.9em;
+  color: #333;
+}
+
+.fluid-selector-section select {
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 0.9em;
+  width: 100%; /* Растянуть по ширине панели */
+  box-sizing: border-box; /* Чтобы padding не увеличивал общую ширину */
+}
+
+.fluid-selector-section select:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
 }

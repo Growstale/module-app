@@ -12,59 +12,69 @@ import '../styles/MainScreen.css';
 const MainScreen = ({
     modules,
     connections,
-    onDrop,
+    onDrop, // Функция обратного вызова, вызываемая при бросании нового модуля на холст
     onModuleClick,
     updateModulePosition,
     onAddConnection,
     onRemoveConnection,
     selectedModule,
     detailedResults,
+    problematicModules,
+    onDeselectModule // Функция для снятия выделения с модуля при клике на фон
 }) => {
-    const mainScreenRef = useRef(null);
-    const moduleContainerRef = useRef(null);
-
+    const mainScreenRef = useRef(null); // Реф для самого MainScreen
+    const moduleContainerRef = useRef(null); // Реф для div.module-container, на который вешается useDrop и обработчики панорамирования/масштабирования
+    
+    // Объект, хранящий состояние вида холста
+    // x, y: Смещение холста (для панорамирования), k: Коэффициент масштабирования
     const [viewBox, setViewBox] = useState({ x: 0, y: 0, k: 1 });
-    const [isPanning, setIsPanning] = useState(false);
+    const [isPanning, setIsPanning] = useState(false); // происходит ли сейчас панорамирование
+    // Координаты начальной точки клика мыши при панорамировании
     const [panStartPoint, setPanStartPoint] = useState({ x: 0, y: 0 });
-    const [initialViewBox, setInitialViewBox] = useState({ x: 0, y: 0 });
+    // Изначальное смещение viewBox в момент начала панорамирования
+    const [initialViewBoxForPan, setInitialViewBoxForPan] = useState({ x: 0, y: 0 });
+    const didPanRef = useRef(false); // Флаг, чтобы отличить клик от панорамирования
 
+    // Обрабатывает клик по линии соединения
     const handleLineClick = (event, connectionId) => {
         event.stopPropagation();
-        if (window.confirm("Are you sure you want to delete this connection?")) {
+        if (window.confirm("Удалить это соединение?")) {
             onRemoveConnection(connectionId);
         }
     };
 
+    // Настраивает MainScreen как область для перетаскивания элементов
     const [, drop] = useDrop(() => ({
         accept: ['MODULE', 'MODULE_INSTANCE'],
         drop: (item, monitor) => {
-            const offset = monitor.getClientOffset();
-            const container = moduleContainerRef.current;
+            const offset = monitor.getClientOffset(); // Получает координаты мыши относительно окна браузера
+            const container = moduleContainerRef.current; // Получает размеры и позицию контейнера холста
 
             if (offset && container) {
                 const containerRect = container.getBoundingClientRect();
 
-                let relativeXToViewport = offset.x - containerRect.left;
-                let relativeYToViewport = offset.y - containerRect.top;
+                // Координаты мыши относительно контейнера холста
+                let relativeXToContainer = offset.x - containerRect.left;
+                let relativeYToContainer = offset.y - containerRect.top;
 
-                let canvasX = (relativeXToViewport / viewBox.k) + viewBox.x;
-                let canvasY = (relativeYToViewport / viewBox.k) + viewBox.y;
-
-                if (!item.instanceId) {
-                    let dropWidth = MODULE_WIDTH;
-                    let dropHeight = MODULE_HEIGHT;
-                    if (item.type === 'pipe') {
-                        dropHeight = PIPE_HEIGHT;
-                    } else if (item.type === 'splitter' || item.type === 'collector') {
-                        dropWidth = SPLITTER_WIDTH;
-                        dropHeight = SPLITTER_HEIGHT;
-                    }
-                    canvasX -= (dropWidth / 2);
-                    canvasY -= (dropHeight / 2);
+                // Преобразуем в координаты холста с учетом текущего масштаба и сдвига
+                let canvasX = (relativeXToContainer / viewBox.k) + viewBox.x;
+                let canvasY = (relativeYToContainer / viewBox.k) + viewBox.y;
+                
+                // Позиция корректируется так, чтобы модуль оказался центрированным под курсором
+                let dropWidth = MODULE_WIDTH;
+                let dropHeight = MODULE_HEIGHT;
+                if (item.type === 'pipe') {
+                    dropHeight = PIPE_HEIGHT;
+                } else if (item.type === 'splitter' || item.type === 'collector') {
+                    dropWidth = SPLITTER_WIDTH;
+                    dropHeight = SPLITTER_HEIGHT;
                 }
+                canvasX -= (dropWidth / 2);
+                canvasY -= (dropHeight / 2);
 
                 onDrop(item, { x: canvasX, y: canvasY });
-                return { name: 'MainScreen' };
+                return { name: 'MainScreen' }; // Имя drop target
             }
             return undefined;
         },
@@ -74,6 +84,7 @@ const MainScreen = ({
         }),
     }), [onDrop, modules, viewBox.x, viewBox.y, viewBox.k]);
 
+    // Функция для определения координат центра порта на холсте
     const getPortCenterOnCanvas = (portId, portRole = 'output') => {
         const portIdStr = String(portId);
         let moduleInstance;
@@ -127,55 +138,76 @@ const MainScreen = ({
         };
     };
 
-  const handleMouseDown = useCallback((e) => {
-    if (e.target.closest && (e.target.closest('.draggable-module') || e.target.closest('.connection-line svg'))) {
-        return; 
-    }
-    
-    if (e.button === 0 || e.button === 1) {
-        e.preventDefault();
-        setIsPanning(true);
-        setPanStartPoint({ x: e.clientX, y: e.clientY });
-        setInitialViewBox({ x: viewBox.x, y: viewBox.y });
-    }
-  }, [viewBox.x, viewBox.y]); 
-
-    const handleMouseMove = useCallback((e) => {
-        if (isPanning) {
-            e.preventDefault();
-            const dx = e.clientX - panStartPoint.x;
-            const dy = e.clientY - panStartPoint.y;
-
-            setViewBox(prev => ({
-                ...prev,
-                x: initialViewBox.x - (dx / prev.k),
-                y: initialViewBox.y - (dy / prev.k),
-            }));
+    // Начинаем панорамирование только если клик был не по модулю или линии
+    const handleMouseDownOnContainer = useCallback((e) => {
+        if (e.target.closest && (e.target.closest('.draggable-module') || e.target.closest('.connection-line'))) {
+            return;
         }
-    }, [isPanning, panStartPoint, initialViewBox]);
+        if (e.button === 0 || e.button === 1) { 
+            setIsPanning(true);
+            setPanStartPoint({ x: e.clientX, y: e.clientY });
+            setInitialViewBoxForPan({ x: viewBox.x, y: viewBox.y });
+            didPanRef.current = false; 
+        }
+    }, [viewBox.x, viewBox.y]);
 
-    const handleMouseUp = useCallback(() => {
+    // Обработчик движения мыши isPanning = true
+    const handleGlobalMouseMove = useCallback((e) => {
+        if (!isPanning) return;
+
+        const dx = e.clientX - panStartPoint.x;
+        const dy = e.clientY - panStartPoint.y;
+
+        if (!didPanRef.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+            didPanRef.current = true; 
+        }
+
+        setViewBox(prev => ({
+            ...prev,
+            x: initialViewBoxForPan.x - (dx / prev.k),
+            y: initialViewBoxForPan.y - (dy / prev.k),
+        }));
+    }, [isPanning, panStartPoint, initialViewBoxForPan, viewBox.k]);
+
+    // Обработчик отпускания кнопки мыши isPanning = true
+    const handleGlobalMouseUp = useCallback(() => {
         if (isPanning) {
             setIsPanning(false);
         }
     }, [isPanning]);
 
-    const handleWheel = useCallback((e) => {
+    const handleClickOnContainer = useCallback((e) => {
+        // Вызываем onDeselectModule только если:
+        // 1. Не было панорамирования (didPanRef.current === false)
+        // 2. Клик был непосредственно по moduleContainerRef (или его прямому потомку - canvas-layer,
+        //    но не по элементу внутри canvas-layer, такому как draggable-module)
+        // 3. onDeselectModule передан
+        if (!didPanRef.current && onDeselectModule) {
+            if (e.target === moduleContainerRef.current || e.target.classList.contains('canvas-layer')) {
+                onDeselectModule();
+            }
+        }
+        didPanRef.current = false; 
+    }, [onDeselectModule]);
+    
+    // Обработчик события колеса мыши
+    const handleWheelOnContainer = useCallback((e) => {
         e.preventDefault();
         const scaleAmount = 1.1;
         const container = moduleContainerRef.current;
         if (!container) return;
 
         const containerRect = container.getBoundingClientRect();
-        const mouseX = e.clientX - containerRect.left;
+        const mouseX = e.clientX - containerRect.left; 
         const mouseY = e.clientY - containerRect.top;
 
         const mouseCanvasX_beforeZoom = viewBox.x + mouseX / viewBox.k;
         const mouseCanvasY_beforeZoom = viewBox.y + mouseY / viewBox.k;
 
         const newK = e.deltaY < 0 ? viewBox.k * scaleAmount : viewBox.k / scaleAmount;
-        const kClamped = Math.min(Math.max(newK, 0.1), 5);
+        const kClamped = Math.min(Math.max(newK, 0.1), 5); // Ограничение масштаба
 
+        // Новые координаты верхнего левого угла viewBox, чтобы точка под курсором осталась на месте
         const newViewBoxX = mouseCanvasX_beforeZoom - mouseX / kClamped;
         const newViewBoxY = mouseCanvasY_beforeZoom - mouseY / kClamped;
 
@@ -183,67 +215,81 @@ const MainScreen = ({
     }, [viewBox]);
 
     useEffect(() => {
-        const mainEl = mainScreenRef.current;
-        if (mainEl) {
-            mainEl.addEventListener('mousemove', handleMouseMove);
-            mainEl.addEventListener('mouseup', handleMouseUp);
-            mainEl.addEventListener('mouseleave', handleMouseUp);
-            mainEl.addEventListener('wheel', handleWheel, { passive: false });
-
+        if (isPanning) {
+            document.addEventListener('mousemove', handleGlobalMouseMove);
+            document.addEventListener('mouseup', handleGlobalMouseUp);
             return () => {
-                mainEl.removeEventListener('mousemove', handleMouseMove);
-                mainEl.removeEventListener('mouseup', handleMouseUp);
-                mainEl.removeEventListener('mouseleave', handleMouseUp);
-                mainEl.removeEventListener('wheel', handleWheel);
+                document.removeEventListener('mousemove', handleGlobalMouseMove);
+                document.removeEventListener('mouseup', handleGlobalMouseUp);
             };
         }
-    }, [handleMouseMove, handleMouseUp, handleWheel]);
+    }, [isPanning, handleGlobalMouseMove, handleGlobalMouseUp]);
+    
+    useEffect(() => {
+        const containerEl = moduleContainerRef.current;
+        if (containerEl) {
+            containerEl.addEventListener('wheel', handleWheelOnContainer, { passive: false });
+            return () => {
+                containerEl.removeEventListener('wheel', handleWheelOnContainer);
+            };
+        }
+    }, [handleWheelOnContainer]);
+
 
     return (
         <div
-            ref={(el) => {
-                drop(el);
-                mainScreenRef.current = el;
-            }}
+            ref={mainScreenRef} 
             className="main-screen"
-            onMouseDown={handleMouseDown}
-            style={{ cursor: isPanning ? 'grabbing' : 'default', outline: 'none' }}
-            tabIndex={-1}
+            style={{ 
+                flexGrow: 1,
+                position: 'relative', 
+                outline: 'none', 
+                cursor: isPanning ? 'grabbing' : 'default' 
+            }}
+            tabIndex={-1} 
         >
             <div
-                ref={moduleContainerRef}
+                ref={(el) => {
+                    drop(el); 
+                    moduleContainerRef.current = el;
+                }}
                 className="module-container"
+                onMouseDown={handleMouseDownOnContainer}
+                onClick={handleClickOnContainer}
                 style={{
                     width: '100%',
-                    height: 'calc(100% - 40px)',
+                    height: '100%', 
                     overflow: 'hidden',
-                    position: 'relative',
+                    position: 'absolute', 
+                    top: 0,
+                    left: 0,
                     backgroundColor: '#f0f0f0',
                 }}
             >
                 <div
                     className="canvas-layer"
                     style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
                         transform: `scale(${viewBox.k}) translate(${-viewBox.x}px, ${-viewBox.y}px)`,
                         transformOrigin: '0 0',
-                        width: '5000px',
-                        height: '5000px',
+                        width: '10000px', 
+                        height: '10000px',
                     }}
                 >
                     {modules.map((module) => (
                         <DraggableModule
                             key={module.instanceId}
                             module={module}
-                            onClick={onModuleClick}
+                            onClick={(clickedModule, event) => {
+                                if (event) event.stopPropagation(); 
+                                onModuleClick(clickedModule);
+                            }}
                             onUpdatePosition={updateModulePosition}
                             onConnect={onAddConnection}
                             connections={connections}
                             isSelected={selectedModule && selectedModule.instanceId === module.instanceId}
                             calculatedPipeData={detailedResults}
                             viewBoxScale={viewBox.k}
+                            problematicModules={problematicModules}
                         />
                     ))}
                     <svg
@@ -253,7 +299,7 @@ const MainScreen = ({
                             left: 0,
                             width: '100%',
                             height: '100%',
-                            pointerEvents: 'none',
+                            pointerEvents: 'none', 
                         }}
                     >
                         <defs>
@@ -262,8 +308,8 @@ const MainScreen = ({
                                 viewBox="0 0 10 10"
                                 refX="8"
                                 refY="5"
-                                markerWidth={6}
-                                markerHeight={6}
+                                markerWidth="6" 
+                                markerHeight="6"
                                 orient="auto-start-reverse"
                             >
                                 <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
@@ -278,15 +324,18 @@ const MainScreen = ({
                                     <g
                                         key={conn.id}
                                         className="connection-line"
-                                        style={{ pointerEvents: 'auto' }}
+                                        style={{ pointerEvents: 'auto' }} 
                                     >
                                         <line
                                             x1={startCanvas.x} y1={startCanvas.y}
                                             x2={endCanvas.x} y2={endCanvas.y}
                                             stroke="black"
-                                            strokeWidth={2 / viewBox.k}
+                                            strokeWidth={Math.max(1, 2 / viewBox.k)} 
                                             markerEnd="url(#arrow)"
-                                            onClick={(e) => handleLineClick(e, conn.id)}
+                                            onClick={(e) => {
+                                                e.stopPropagation(); 
+                                                handleLineClick(e, conn.id);
+                                            }}
                                             style={{ cursor: 'pointer' }}
                                         />
                                     </g>

@@ -77,3 +77,23 @@
 .cylinder-details p strong {
     color: #555;
 }
+
+.system-warnings, .branch-warnings {
+    background-color: #fff3cd; /* Светло-желтый фон */
+    border: 1px solid #ffeeba;
+    color: #856404; /* Темно-желтый текст */
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.system-warnings h4, .branch-warnings h5 {
+    color: #856404;
+    margin-top: 0;
+}
+
+.system-warnings ul, .branch-warnings ul {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin-bottom: 0;
+}
