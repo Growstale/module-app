@@ -8,8 +8,6 @@ import LoadSchemeModal from './components/LoadSchemeModal';
 import ResultsDisplay from './components/ResultsDisplay';
 import './styles/App.css';
 
-const API_BASE_URL = 'http://localhost:5001/api';
-
 function App() {
     const [selectedModule, setSelectedModule] = useState(null);
     const [mainScreenModules, setMainScreenModules] = useState([]);
@@ -272,7 +270,7 @@ function App() {
         setProcessingResult('Calculating...');
         
         try {
-            const response = await fetch(`${API_BASE_URL}/calculate-hydraulics`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/calculate-hydraulics`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -357,7 +355,7 @@ function App() {
     const fetchSavedSchemes = useCallback(async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/schemes`);
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/schemes`);
             if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
             const data = await response.json();
             setSavedSchemes(data || []);
@@ -397,13 +395,13 @@ function App() {
             let savedScheme;
 
             if (schemeToSaveId) { 
-                response = await fetch(`${API_BASE_URL}/schemes/${schemeToSaveId}`, {
+                response = await fetch(`${process.env.REACT_APP_API_URL}/schemes/${schemeToSaveId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
             } else { 
-                response = await fetch(`${API_BASE_URL}/schemes`, {
+                response = await fetch(`${process.env.REACT_APP_API_URL}/schemes`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -429,7 +427,7 @@ function App() {
         if (!schemeId) return;
         setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/schemes/${schemeId}`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/schemes/${schemeId}`, {
                 method: 'DELETE',
             });
             if (!response.ok) {
@@ -455,7 +453,7 @@ function App() {
         if (!schemeId) return;
         setIsLoading(true); setIsLoadModalOpen(false);
         try {
-            const response = await fetch(`${API_BASE_URL}/schemes/${schemeId}`);
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/schemes/${schemeId}`);
             if (!response.ok) {
                 if (response.status === 404) { throw new Error("Scheme not found."); }
                 const errorData = await response.json(); throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
